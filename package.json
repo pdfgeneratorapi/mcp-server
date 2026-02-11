@@ -1,0 +1,67 @@
+{
+  "name": "@pdfgeneratorapi/mcp-server",
+  "version": "4.0.17",
+  "description": "Model Context Protocol (MCP) server for the PDF Generator API - enables AI assistants to generate PDFs, manage templates, and use PDF services",
+  "private": false,
+  "type": "module",
+  "main": "build/index.js",
+  "license": "MIT",
+  "author": "PDF Generator API <support@pdfgeneratorapi.com> (https://pdfgeneratorapi.com)",
+  "homepage": "https://github.com/pdfgeneratorapi/mcp-server#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pdfgeneratorapi/mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/pdfgeneratorapi/mcp-server/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "pdf",
+    "pdf-generator",
+    "pdfgeneratorapi",
+    "ai",
+    "claude",
+    "anthropic",
+    "openapi",
+    "api"
+  ],
+  "files": [
+    "build",
+    "src"
+  ],
+  "scripts": {
+    "start": "node build/index.js",
+    "start:stdio": "node build/index.js",
+    "start:http": "node build/index.js --transport=streamable-http",
+    "build": "tsc && chmod 755 build/index.js",
+    "typecheck": "tsc --noEmit",
+    "prestart": "npm run build",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.14.1",
+    "@modelcontextprotocol/sdk": "^1.10.0",
+    "axios": "^1.9.0",
+    "dotenv": "^16.4.5",
+    "fetch-to-node": "^2.1.0",
+    "hono": "^4.7.7",
+    "json-schema-to-zod": "^2.6.1",
+    "uuid": "^11.1.0",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.15.2",
+    "@types/uuid": "^10.0.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.8.3"
+  }
+}
