@@ -184,8 +184,12 @@ export async function setupStreamableHttpServer(port = 3000) {
   // Create Hono app
   const app = new Hono();
 
-  // Enable CORS
-  app.use('*', cors());
+  // Enable CORS - restrict origins in production via CORS_ORIGIN env var
+  // e.g. CORS_ORIGIN="https://example.com,https://app.example.com"
+  const corsOrigin = process.env.CORS_ORIGIN;
+  app.use('*', cors({
+    origin: corsOrigin ? corsOrigin.split(',').map(o => o.trim()) : '*',
+  }));
 
   // Create MCP handler (creates new server instances per session)
   const mcpHandler = new MCPStreamableHttpServer();
