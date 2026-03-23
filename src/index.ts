@@ -219,6 +219,15 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     executionParameters: [],
     requestBodyContentType: "application/json",
   }],
+  ["makeAccessible", {
+    name: "makeAccessible",
+    description: `Adds accessibility tags to a PDF document from base64 string or a remote URL.`,
+    inputSchema: {"type":"object","properties":{"requestBody":{"oneOf":[{"type":"object","required":["file_url"],"properties":{"file_url":{"description":"Public URL to a PDF document","type":"string"},"options":{"description":"Processing options (e.g. clear_structure)","type":"array","items":{"type":"string"}},"name":{"description":"Name for the PDF file","type":"string"},"output":{"description":"Returned document output format","type":"string","enum":["file","base64"],"default":"base64"},"metadata":{"type":"object","properties":{"author":{"description":"Document author","type":"string"},"language":{"description":"Document language code","type":"string","default":"en"}}}}},{"type":"object","required":["file"],"properties":{"file":{"description":"PDF document in base64 encoded string format","type":"string"},"options":{"description":"Processing options (e.g. clear_structure)","type":"array","items":{"type":"string"}},"name":{"description":"Name for the PDF file","type":"string"},"output":{"description":"Returned document output format","type":"string","enum":["file","base64"],"default":"base64"},"metadata":{"type":"object","properties":{"author":{"description":"Document author","type":"string"},"language":{"description":"Document language code","type":"string","default":"en"}}}}}],"description":"The JSON request body."}},"required":["requestBody"]},
+    method: "post",
+    pathTemplate: "/pdfservices/make-accessible",
+    executionParameters: [],
+    requestBodyContentType: "application/json",
+  }],
   ["extractFormFields", {
     name: "extractFormFields",
     description: `Extracts form fields and their metadata from a PDF document using base64 string or a remote URL.`,
