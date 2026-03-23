@@ -724,10 +724,11 @@ export async function executeApiTool(
 
     // Prepare the axios request configuration
     const config: AxiosRequestConfig = {
-      method: definition.method.toUpperCase(), 
-      url: requestUrl, 
-      params: queryParams, 
+      method: definition.method.toUpperCase(),
+      url: requestUrl,
+      params: queryParams,
       headers: headers,
+      timeout: 30000,
       ...(requestBodyData !== undefined && { data: requestBodyData }),
     };
 
