@@ -12,7 +12,9 @@ import { InitializeRequestSchema, JSONRPCError } from "@modelcontextprotocol/sdk
 import { toReqRes, toFetchResponse } from 'fetch-to-node';
 
 // Import server configuration constants and factory
-import { SERVER_NAME, SERVER_VERSION, createMcpServer, log } from './index.js';
+import { SERVER_NAME, SERVER_VERSION } from './config.js';
+import { createMcpServer } from './server.js';
+import { log } from './logger.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
