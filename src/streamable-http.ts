@@ -17,6 +17,8 @@ import { SERVER_NAME, SERVER_VERSION, createMcpServer } from './index.js';
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
 const JSON_RPC = "2.0";
+const SESSION_TTL_MS = parseInt(process.env.SESSION_TTL_MINUTES || '30', 10) * 60 * 1000;
+const SESSION_CLEANUP_INTERVAL_MS = 60 * 1000; // Check every minute
 
 /**
  * StreamableHTTP MCP Server handler
@@ -27,9 +29,39 @@ class MCPStreamableHttpServer {
   servers: {[sessionId: string]: Server} = {};
   // Store authorization tokens per session
   sessionTokens: {[sessionId: string]: string} = {};
+  // Track last activity per session for TTL expiration
+  private lastActivity: {[sessionId: string]: number} = {};
+  private cleanupTimer: ReturnType<typeof setInterval>;
 
   constructor() {
-    // No shared server - we create one per session
+    this.cleanupTimer = setInterval(() => this.cleanupStaleSessions(), SESSION_CLEANUP_INTERVAL_MS);
+    this.cleanupTimer.unref();
+  }
+
+  /**
+   * Remove sessions that have been idle longer than SESSION_TTL_MS
+   */
+  private cleanupStaleSessions() {
+    const now = Date.now();
+    for (const sessionId of Object.keys(this.lastActivity)) {
+      if (now - this.lastActivity[sessionId] > SESSION_TTL_MS) {
+        console.error(`Session expired (idle > ${SESSION_TTL_MS / 60000}m): ${sessionId}`);
+        this.destroySession(sessionId);
+      }
+    }
+  }
+
+  /**
+   * Clean up all resources for a session
+   */
+  private destroySession(sessionId: string) {
+    try {
+      this.transports[sessionId]?.close();
+    } catch { /* ignore close errors */ }
+    delete this.transports[sessionId];
+    delete this.servers[sessionId];
+    delete this.sessionTokens[sessionId];
+    delete this.lastActivity[sessionId];
   }
   
   /**
@@ -58,6 +90,7 @@ class MCPStreamableHttpServer {
       
       // Reuse existing transport if we have a session ID
       if (sessionId && this.transports[sessionId]) {
+        this.lastActivity[sessionId] = Date.now();
         const transport = this.transports[sessionId];
         
         // Handle the request with the transport
@@ -107,6 +140,7 @@ class MCPStreamableHttpServer {
           console.error(`New session established: ${newSessionId}`);
           this.transports[newSessionId] = transport;
           this.servers[newSessionId] = newServer;
+          this.lastActivity[newSessionId] = Date.now();
           if (bearerToken) {
             this.sessionTokens[newSessionId] = bearerToken;
           }
@@ -114,9 +148,7 @@ class MCPStreamableHttpServer {
           // Set up clean-up for when the transport is closed
           transport.onclose = () => {
             console.error(`Session closed: ${newSessionId}`);
-            delete this.transports[newSessionId];
-            delete this.servers[newSessionId];
-            delete this.sessionTokens[newSessionId];
+            this.destroySession(newSessionId);
           };
         }
 
