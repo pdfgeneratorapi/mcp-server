@@ -18,7 +18,6 @@ function createMockToolDefinition(overrides: Partial<McpToolDefinition> = {}): M
     pathTemplate: '/test',
     executionParameters: [],
     requestBodyContentType: undefined,
-    securityRequirements: [],
     ...overrides
   };
 }
@@ -33,7 +32,6 @@ describe('McpToolDefinition', () => {
       expect(tool.method).toBe('get');
       expect(tool.pathTemplate).toBe('/test');
       expect(tool.executionParameters).toEqual([]);
-      expect(tool.securityRequirements).toEqual([]);
     });
 
     it('should allow overriding default values', () => {
@@ -80,15 +78,6 @@ describe('McpToolDefinition', () => {
       });
 
       expect(tool.executionParameters[0].in).toBe('header');
-    });
-
-    it('should support security requirements', () => {
-      const tool = createMockToolDefinition({
-        securityRequirements: [{ JWT: [] }]
-      });
-
-      expect(tool.securityRequirements).toHaveLength(1);
-      expect(tool.securityRequirements[0]).toHaveProperty('JWT');
     });
 
     it('should support complex input schemas', () => {

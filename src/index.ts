@@ -39,7 +39,6 @@ export interface McpToolDefinition {
     pathTemplate: string;
     executionParameters: { name: string, in: string }[];
     requestBodyContentType?: string;
-    securityRequirements: any[];
 }
 
 /**
@@ -164,16 +163,11 @@ export function createMcpServer(bearerToken?: string): Server {
             console.error(`Error: Unknown tool requested: ${toolName}`);
             return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }] };
         }
-        return await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, securitySchemes, bearerToken);
+        return await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, bearerToken);
     });
 
     return server;
 }
-
-/**
- * MCP Server instance (for backwards compatibility)
- */
-const server = createMcpServer();
 
 /**
  * Map of tool definitions by name
@@ -188,7 +182,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/status",
     executionParameters: [],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["addWatermark", {
     name: "addWatermark",
@@ -198,7 +191,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/pdfservices/watermark",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["encryptDocument", {
     name: "encryptDocument",
@@ -208,7 +200,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/pdfservices/encrypt",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["decryptDocument", {
     name: "decryptDocument",
@@ -218,7 +209,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/pdfservices/decrypt",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["optimizeDocument", {
     name: "optimizeDocument",
@@ -228,7 +218,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/pdfservices/optimize",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["extractFormFields", {
     name: "extractFormFields",
@@ -238,7 +227,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/pdfservices/form/fields",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["fillFormFields", {
     name: "fillFormFields",
@@ -248,7 +236,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/pdfservices/form/fill",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getTemplates", {
     name: "getTemplates",
@@ -258,7 +245,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/templates",
     executionParameters: [{"name":"name","in":"query"},{"name":"tags","in":"query"},{"name":"access","in":"query"},{"name":"page","in":"query"},{"name":"per_page","in":"query"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["createTemplate", {
     name: "createTemplate",
@@ -268,7 +254,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/templates",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getTemplateSchema", {
     name: "getTemplateSchema",
@@ -278,7 +263,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/templates/schema",
     executionParameters: [],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["importTemplate", {
     name: "importTemplate",
@@ -288,7 +272,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/templates/import",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["validateTemplate", {
     name: "validateTemplate",
@@ -298,7 +281,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/templates/validate",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getTemplate", {
     name: "getTemplate",
@@ -308,7 +290,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/templates/{templateId}",
     executionParameters: [{"name":"templateId","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["updateTemplate", {
     name: "updateTemplate",
@@ -318,7 +299,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/templates/{templateId}",
     executionParameters: [{"name":"templateId","in":"path"}],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["deleteTemplate", {
     name: "deleteTemplate",
@@ -328,7 +308,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/templates/{templateId}",
     executionParameters: [{"name":"templateId","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getTemplateData", {
     name: "getTemplateData",
@@ -339,7 +318,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/templates/{templateId}/data",
     executionParameters: [{"name":"templateId","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["copyTemplate", {
     name: "copyTemplate",
@@ -349,7 +327,6 @@ const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     pathTemplate: "/templates/{templateId}/copy",
     executionParameters: [{"name":"templateId","in":"path"}],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["openEditor", {
     name: "openEditor",
@@ -361,7 +338,6 @@ When using iframe, make sure that your browser allows third-party cookies.
     pathTemplate: "/templates/{templateId}/editor",
     executionParameters: [{"name":"templateId","in":"path"}],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["listTemplateVersions", {
     name: "listTemplateVersions",
@@ -372,7 +348,6 @@ When using iframe, make sure that your browser allows third-party cookies.
     pathTemplate: "/templates/{templateId}/versions",
     executionParameters: [{"name":"templateId","in":"path"},{"name":"per_page","in":"query"},{"name":"page","in":"query"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getTemplateVersion", {
     name: "getTemplateVersion",
@@ -383,7 +358,6 @@ When using iframe, make sure that your browser allows third-party cookies.
     pathTemplate: "/templates/{templateId}/versions/{templateVersion}",
     executionParameters: [{"name":"templateId","in":"path"},{"name":"templateVersion","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["deleteTemplateVersion", {
     name: "deleteTemplateVersion",
@@ -395,7 +369,6 @@ Production versions cannot be deleted.
     pathTemplate: "/templates/{templateId}/versions/{templateVersion}",
     executionParameters: [{"name":"templateId","in":"path"},{"name":"templateVersion","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["promoteTemplateVersion", {
     name: "promoteTemplateVersion",
@@ -407,7 +380,6 @@ Only one version can be production at a time.
     pathTemplate: "/templates/{templateId}/versions/{templateVersion}/promote",
     executionParameters: [{"name":"templateId","in":"path"},{"name":"templateVersion","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getDocuments", {
     name: "getDocuments",
@@ -417,7 +389,6 @@ Only one version can be production at a time.
     pathTemplate: "/documents",
     executionParameters: [{"name":"template_id","in":"query"},{"name":"start_date","in":"query"},{"name":"end_date","in":"query"},{"name":"page","in":"query"},{"name":"per_page","in":"query"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getDocument", {
     name: "getDocument",
@@ -427,7 +398,6 @@ Only one version can be production at a time.
     pathTemplate: "/documents/{publicId}",
     executionParameters: [{"name":"publicId","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["deleteDocument", {
     name: "deleteDocument",
@@ -437,7 +407,6 @@ Only one version can be production at a time.
     pathTemplate: "/documents/{publicId}",
     executionParameters: [{"name":"publicId","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["generateDocument", {
     name: "generateDocument",
@@ -447,7 +416,6 @@ Only one version can be production at a time.
     pathTemplate: "/documents/generate",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["generateDocumentAsynchronous", {
     name: "generateDocumentAsynchronous",
@@ -472,7 +440,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/documents/generate/async",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["generateDocumentBatch", {
     name: "generateDocumentBatch",
@@ -482,7 +449,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/documents/generate/batch",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["generateDocumentBatchAsynchronous", {
     name: "generateDocumentBatchAsynchronous",
@@ -507,7 +473,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/documents/generate/batch/async",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getAsyncJobStatus", {
     name: "getAsyncJobStatus",
@@ -517,7 +482,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/documents/async/{jobId}",
     executionParameters: [{"name":"jobId","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getWorkspaces", {
     name: "getWorkspaces",
@@ -527,7 +491,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/workspaces",
     executionParameters: [{"name":"page","in":"query"},{"name":"per_page","in":"query"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["createWorkspace", {
     name: "createWorkspace",
@@ -537,7 +500,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/workspaces",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getWorkspace", {
     name: "getWorkspace",
@@ -547,7 +509,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/workspaces/{workspaceIdentifier}",
     executionParameters: [{"name":"workspaceIdentifier","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["deleteWorkspace", {
     name: "deleteWorkspace",
@@ -557,7 +518,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/workspaces/{workspaceIdentifier}",
     executionParameters: [{"name":"workspaceIdentifier","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["convertHTML2PDF", {
     name: "convertHTML2PDF",
@@ -567,7 +527,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/conversion/html2pdf",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["convertURL2PDF", {
     name: "convertURL2PDF",
@@ -577,7 +536,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/conversion/url2pdf",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getForms", {
     name: "getForms",
@@ -587,7 +545,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/forms",
     executionParameters: [{"name":"page","in":"query"},{"name":"per_page","in":"query"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["createForm", {
     name: "createForm",
@@ -597,7 +554,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/forms",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["importForm", {
     name: "importForm",
@@ -607,7 +563,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/forms/import",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getForm", {
     name: "getForm",
@@ -617,7 +572,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/forms/{formId}",
     executionParameters: [{"name":"formId","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["updateForm", {
     name: "updateForm",
@@ -627,7 +581,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/forms/{formId}",
     executionParameters: [{"name":"formId","in":"path"}],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["deleteForm", {
     name: "deleteForm",
@@ -637,7 +590,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/forms/{formId}",
     executionParameters: [{"name":"formId","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["shareForm", {
     name: "shareForm",
@@ -647,7 +599,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/forms/{formId}/share",
     executionParameters: [{"name":"formId","in":"path"}],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
   ["generateQRCode", {
     name: "generateQRCode",
@@ -657,7 +608,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/assets/qrcode",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["createEInvoice", {
     name: "createEInvoice",
@@ -667,7 +617,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/einvoice",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["createXRechnungEInvoice", {
     name: "createXRechnungEInvoice",
@@ -677,7 +626,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/einvoice/xrechnung",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["createFacturXEInvoice", {
     name: "createFacturXEInvoice",
@@ -687,7 +635,6 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/einvoice/facturx",
     executionParameters: [],
     requestBodyContentType: "application/json",
-    securityRequirements: [{"JWT":[]}]
   }],
   ["getEInvoiceSchema", {
     name: "getEInvoiceSchema",
@@ -697,131 +644,8 @@ The job id is also added to the callback request as header PDF-API-Job-Id
     pathTemplate: "/einvoice/schema",
     executionParameters: [],
     requestBodyContentType: undefined,
-    securityRequirements: [{"JWT":[]}]
   }],
 ]);
-
-/**
- * Security schemes from the OpenAPI spec
- */
-const securitySchemes =   {
-    "JWT": {
-      "type": "http",
-      "scheme": "bearer",
-      "bearerFormat": "JWT",
-      "description": "JSON Web Token (JWT) is an open standard (RFC 7519) that defines a compact and self-contained way for securely transmitting information between parties as a JSON object. This information can be verified and trusted because it is digitally signed. JWTs can be signed using a secret (with the HMAC algorithm) or a public/private key pair using RSA or ECDSA. For more information about JSON Web Tokens check [jwt.io](https://jwt.io).\n"
-    }
-  };
-
-
-/**
- * Type definition for cached OAuth tokens
- */
-interface TokenCacheEntry {
-    token: string;
-    expiresAt: number;
-}
-
-/**
- * Declare global __oauthTokenCache property for TypeScript
- */
-declare global {
-    var __oauthTokenCache: Record<string, TokenCacheEntry> | undefined;
-}
-
-/**
- * Acquires an OAuth2 token using client credentials flow
- * 
- * @param schemeName Name of the security scheme
- * @param scheme OAuth2 security scheme
- * @returns Acquired token or null if unable to acquire
- */
-async function acquireOAuth2Token(schemeName: string, scheme: any): Promise<string | null | undefined> {
-    try {
-        // Check if we have the necessary credentials
-        const clientId = process.env[`OAUTH_CLIENT_ID_SCHEMENAME`];
-        const clientSecret = process.env[`OAUTH_CLIENT_SECRET_SCHEMENAME`];
-        const scopes = process.env[`OAUTH_SCOPES_SCHEMENAME`];
-        
-        if (!clientId || !clientSecret) {
-            console.error(`Missing client credentials for OAuth2 scheme '${schemeName}'`);
-            return null;
-        }
-        
-        // Initialize token cache if needed
-        if (typeof global.__oauthTokenCache === 'undefined') {
-            global.__oauthTokenCache = {};
-        }
-        
-        // Check if we have a cached token
-        const cacheKey = `${schemeName}_${clientId}`;
-        const cachedToken = global.__oauthTokenCache[cacheKey];
-        const now = Date.now();
-        
-        if (cachedToken && cachedToken.expiresAt > now) {
-            console.error(`Using cached OAuth2 token for '${schemeName}' (expires in ${Math.floor((cachedToken.expiresAt - now) / 1000)} seconds)`);
-            return cachedToken.token;
-        }
-        
-        // Determine token URL based on flow type
-        let tokenUrl = '';
-        if (scheme.flows?.clientCredentials?.tokenUrl) {
-            tokenUrl = scheme.flows.clientCredentials.tokenUrl;
-            console.error(`Using client credentials flow for '${schemeName}'`);
-        } else if (scheme.flows?.password?.tokenUrl) {
-            tokenUrl = scheme.flows.password.tokenUrl;
-            console.error(`Using password flow for '${schemeName}'`);
-        } else {
-            console.error(`No supported OAuth2 flow found for '${schemeName}'`);
-            return null;
-        }
-        
-        // Prepare the token request
-        let formData = new URLSearchParams();
-        formData.append('grant_type', 'client_credentials');
-        
-        // Add scopes if specified
-        if (scopes) {
-            formData.append('scope', scopes);
-        }
-        
-        console.error(`Requesting OAuth2 token from ${tokenUrl}`);
-        
-        // Make the token request
-        const response = await axios({
-            method: 'POST',
-            url: tokenUrl,
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
-            },
-            data: formData.toString()
-        });
-        
-        // Process the response
-        if (response.data?.access_token) {
-            const token = response.data.access_token;
-            const expiresIn = response.data.expires_in || 3600; // Default to 1 hour
-            
-            // Cache the token
-            global.__oauthTokenCache[cacheKey] = {
-                token,
-                expiresAt: now + (expiresIn * 1000) - 60000 // Expire 1 minute early
-            };
-            
-            console.error(`Successfully acquired OAuth2 token for '${schemeName}' (expires in ${expiresIn} seconds)`);
-            return token;
-        } else {
-            console.error(`Failed to acquire OAuth2 token for '${schemeName}': No access_token in response`);
-            return null;
-        }
-    } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        console.error(`Error acquiring OAuth2 token for '${schemeName}':`, errorMessage);
-        return null;
-    }
-}
-
 
 /**
  * Executes an API tool with the provided arguments
@@ -829,15 +653,13 @@ async function acquireOAuth2Token(schemeName: string, scheme: any): Promise<stri
  * @param toolName Name of the tool to execute
  * @param definition Tool definition
  * @param toolArgs Arguments provided by the user
- * @param allSecuritySchemes Security schemes from the OpenAPI spec
- * @param bearerToken Optional bearer token from request (overrides env var)
+ * @param bearerToken Optional bearer token for JWT authentication
  * @returns Call tool result
  */
 export async function executeApiTool(
     toolName: string,
     definition: McpToolDefinition,
     toolArgs: JsonObject,
-    allSecuritySchemes: Record<string, any>,
     bearerToken?: string
 ): Promise<CallToolResult> {
   try {
@@ -894,158 +716,9 @@ export async function executeApiTool(
     }
 
 
-    // Apply security requirements if available
-    // Security requirements use OR between array items and AND within each object
-    const appliedSecurity = definition.securityRequirements?.find(req => {
-        // Try each security requirement (combined with OR)
-        return Object.entries(req).every(([schemeName, scopesArray]) => {
-            const scheme = allSecuritySchemes[schemeName];
-            if (!scheme) return false;
-            
-            // API Key security (header, query, cookie)
-            if (scheme.type === 'apiKey') {
-                return !!process.env[`API_KEY_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`];
-            }
-            
-            // HTTP security (basic, bearer)
-            if (scheme.type === 'http') {
-                if (scheme.scheme?.toLowerCase() === 'bearer') {
-                    // Check if we have a bearer token from request
-                    return !!bearerToken;
-                }
-                else if (scheme.scheme?.toLowerCase() === 'basic') {
-                    return !!process.env[`BASIC_USERNAME_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`] &&
-                           !!process.env[`BASIC_PASSWORD_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`];
-                }
-            }
-            
-            // OAuth2 security
-            if (scheme.type === 'oauth2') {
-                // Check for pre-existing token
-                if (process.env[`OAUTH_TOKEN_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`]) {
-                    return true;
-                }
-                
-                // Check for client credentials for auto-acquisition
-                if (process.env[`OAUTH_CLIENT_ID_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`] &&
-                    process.env[`OAUTH_CLIENT_SECRET_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`]) {
-                    // Verify we have a supported flow
-                    if (scheme.flows?.clientCredentials || scheme.flows?.password) {
-                        return true;
-                    }
-                }
-                
-                return false;
-            }
-            
-            // OpenID Connect
-            if (scheme.type === 'openIdConnect') {
-                return !!process.env[`OPENID_TOKEN_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`];
-            }
-            
-            return false;
-        });
-    });
-
-    // If we found matching security scheme(s), apply them
-    if (appliedSecurity) {
-        // Apply each security scheme from this requirement (combined with AND)
-        for (const [schemeName, scopesArray] of Object.entries(appliedSecurity)) {
-            const scheme = allSecuritySchemes[schemeName];
-            
-            // API Key security
-            if (scheme?.type === 'apiKey') {
-                const apiKey = process.env[`API_KEY_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`];
-                if (apiKey) {
-                    if (scheme.in === 'header') {
-                        headers[scheme.name.toLowerCase()] = apiKey;
-                        console.error(`Applied API key '${schemeName}' in header '${scheme.name}'`);
-                    }
-                    else if (scheme.in === 'query') {
-                        queryParams[scheme.name] = apiKey;
-                        console.error(`Applied API key '${schemeName}' in query parameter '${scheme.name}'`);
-                    }
-                    else if (scheme.in === 'cookie') {
-                        // Add the cookie, preserving other cookies if they exist
-                        headers['cookie'] = `${scheme.name}=${apiKey}${headers['cookie'] ? `; ${headers['cookie']}` : ''}`;
-                        console.error(`Applied API key '${schemeName}' in cookie '${scheme.name}'`);
-                    }
-                }
-            } 
-            // HTTP security (Bearer or Basic)
-            else if (scheme?.type === 'http') {
-                if (scheme.scheme?.toLowerCase() === 'bearer') {
-                    // Use provided bearer token from request
-                    if (bearerToken) {
-                        headers['authorization'] = `Bearer ${bearerToken}`;
-                        console.error(`Applied Bearer token for '${schemeName}' from request`);
-                    }
-                } 
-                else if (scheme.scheme?.toLowerCase() === 'basic') {
-                    const username = process.env[`BASIC_USERNAME_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`];
-                    const password = process.env[`BASIC_PASSWORD_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`];
-                    if (username && password) {
-                        headers['authorization'] = `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`;
-                        console.error(`Applied Basic authentication for '${schemeName}'`);
-                    }
-                }
-            }
-            // OAuth2 security
-            else if (scheme?.type === 'oauth2') {
-                // First try to use a pre-provided token
-                let token = process.env[`OAUTH_TOKEN_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`];
-                
-                // If no token but we have client credentials, try to acquire a token
-                if (!token && (scheme.flows?.clientCredentials || scheme.flows?.password)) {
-                    console.error(`Attempting to acquire OAuth token for '${schemeName}'`);
-                    token = (await acquireOAuth2Token(schemeName, scheme)) ?? '';
-                }
-                
-                // Apply token if available
-                if (token) {
-                    headers['authorization'] = `Bearer ${token}`;
-                    console.error(`Applied OAuth2 token for '${schemeName}'`);
-                    
-                    // List the scopes that were requested, if any
-                    const scopes = scopesArray as string[];
-                    if (scopes && scopes.length > 0) {
-                        console.error(`Requested scopes: ${scopes.join(', ')}`);
-                    }
-                }
-            }
-            // OpenID Connect
-            else if (scheme?.type === 'openIdConnect') {
-                const token = process.env[`OPENID_TOKEN_${schemeName.replace(/[^a-zA-Z0-9]/g, '_').toUpperCase()}`];
-                if (token) {
-                    headers['authorization'] = `Bearer ${token}`;
-                    console.error(`Applied OpenID Connect token for '${schemeName}'`);
-                    
-                    // List the scopes that were requested, if any
-                    const scopes = scopesArray as string[];
-                    if (scopes && scopes.length > 0) {
-                        console.error(`Requested scopes: ${scopes.join(', ')}`);
-                    }
-                }
-            }
-        }
-    } 
-    // Log warning if security is required but not available
-    else if (definition.securityRequirements?.length > 0) {
-        // First generate a more readable representation of the security requirements
-        const securityRequirementsString = definition.securityRequirements
-            .map(req => {
-                const parts = Object.entries(req)
-                    .map(([name, scopesArray]) => {
-                        const scopes = scopesArray as string[];
-                        if (scopes.length === 0) return name;
-                        return `${name} (scopes: ${scopes.join(', ')})`;
-                    })
-                    .join(' AND ');
-                return `[${parts}]`;
-            })
-            .join(' OR ');
-            
-        console.warn(`Tool '${toolName}' requires security: ${securityRequirementsString}, but no suitable credentials found.`);
+    // Apply JWT Bearer authentication
+    if (bearerToken) {
+        headers['authorization'] = `Bearer ${bearerToken}`;
     }
     
 
