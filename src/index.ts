@@ -24,6 +24,18 @@ import { jsonSchemaToZod } from 'json-schema-to-zod';
 import axios, { type AxiosRequestConfig, type AxiosError } from 'axios';
 
 /**
+ * Log level utility — gates verbose output behind LOG_LEVEL=debug.
+ * Errors and warnings always print. Debug messages only when LOG_LEVEL=debug.
+ */
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info';
+export const log = {
+  debug: (...args: unknown[]) => { if (LOG_LEVEL === 'debug') console.error(...args); },
+  info:  (...args: unknown[]) => { console.error(...args); },
+  warn:  (...args: unknown[]) => { console.error(...args); },
+  error: (...args: unknown[]) => { console.error(...args); },
+};
+
+/**
  * Type definition for JSON objects
  */
 type JsonObject = Record<string, any>;
@@ -160,7 +172,7 @@ export function createMcpServer(bearerToken?: string): Server {
         const { name: toolName, arguments: toolArgs } = request.params;
         const toolDefinition = toolDefinitionMap.get(toolName);
         if (!toolDefinition) {
-            console.error(`Error: Unknown tool requested: ${toolName}`);
+            log.warn(`Unknown tool requested: ${toolName}`);
             return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }] };
         }
         return await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, bearerToken);
@@ -741,8 +753,7 @@ export async function executeApiTool(
       ...(requestBodyData !== undefined && { data: requestBodyData }),
     };
 
-    // Log request info to stderr (doesn't affect MCP output)
-    console.error(`Executing tool "${toolName}": ${config.method} ${config.url}`);
+    log.debug(`Executing tool "${toolName}": ${config.method} ${config.url}`);
     
     // Execute the request
     const response = await axios(config);
@@ -799,8 +810,7 @@ export async function executeApiTool(
         errorMessage = 'Unexpected error: ' + String(error); 
     }
     
-    // Log error to stderr
-    console.error(`Error during execution of tool '${toolName}':`, errorMessage);
+    log.error(`Error during execution of tool '${toolName}':`, errorMessage);
     
     // Return error message to client
     return { content: [{ type: "text", text: errorMessage }] };
@@ -819,32 +829,32 @@ async function main() {
 
   if (transport === 'streamable-http') {
     // Set up StreamableHTTP transport
-    console.error('Starting MCP server in HTTP mode...');
+    log.info('Starting MCP server in HTTP mode...');
     try {
       const port = parseInt(process.env.PORT || '3000', 10);
       await setupStreamableHttpServer(port);
     } catch (error) {
-      console.error("Error setting up StreamableHTTP server:", error);
+      log.error("Error setting up StreamableHTTP server:", error);
       process.exit(1);
     }
   } else {
     // Set up Stdio transport (default)
-    console.error('Starting MCP server in stdio mode...');
+    log.info('Starting MCP server in stdio mode...');
     try {
       // In stdio mode, read bearer token from environment variable
       const bearerToken = process.env.BEARER_TOKEN_JWT;
       if (bearerToken) {
-        console.error('Using Bearer token from BEARER_TOKEN_JWT environment variable');
+        log.debug('Bearer token configured from BEARER_TOKEN_JWT');
       } else {
-        console.error('No BEARER_TOKEN_JWT found in environment - API calls may fail without authentication');
+        log.warn('No BEARER_TOKEN_JWT found - API calls may fail without authentication');
       }
 
       const stdioServer = createMcpServer(bearerToken);
       const transport = new StdioServerTransport();
       await stdioServer.connect(transport);
-      console.error('MCP server running in stdio mode');
+      log.info('MCP server running in stdio mode');
     } catch (error) {
-      console.error("Error setting up stdio transport:", error);
+      log.error("Error setting up stdio transport:", error);
       process.exit(1);
     }
   }
@@ -854,7 +864,7 @@ async function main() {
  * Cleanup function for graceful shutdown
  */
 async function cleanup() {
-    console.error("Shutting down MCP server...");
+    log.info("Shutting down MCP server...");
     process.exit(0);
 }
 
@@ -864,7 +874,7 @@ process.on('SIGTERM', cleanup);
 
 // Start the server
 main().catch((error) => {
-  console.error("Fatal error in main execution:", error);
+  log.error("Fatal error in main execution:", error);
   process.exit(1);
 });
 
@@ -924,7 +934,7 @@ function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTyp
         }
         return zodSchema as z.ZodTypeAny;
     } catch (err: any) {
-        console.error(`Failed to generate/evaluate Zod schema for '${toolName}':`, err);
+        log.warn(`Failed to generate/evaluate Zod schema for '${toolName}':`, err);
         return z.object({}).passthrough();
     }
 }

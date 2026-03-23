@@ -12,7 +12,7 @@ import { InitializeRequestSchema, JSONRPCError } from "@modelcontextprotocol/sdk
 import { toReqRes, toFetchResponse } from 'fetch-to-node';
 
 // Import server configuration constants and factory
-import { SERVER_NAME, SERVER_VERSION, createMcpServer } from './index.js';
+import { SERVER_NAME, SERVER_VERSION, createMcpServer, log } from './index.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
@@ -45,7 +45,7 @@ class MCPStreamableHttpServer {
     const now = Date.now();
     for (const sessionId of Object.keys(this.lastActivity)) {
       if (now - this.lastActivity[sessionId] > SESSION_TTL_MS) {
-        console.error(`Session expired (idle > ${SESSION_TTL_MS / 60000}m): ${sessionId}`);
+        log.debug(`Session expired (idle > ${SESSION_TTL_MS / 60000}m): ${sessionId}`);
         this.destroySession(sessionId);
       }
     }
@@ -68,7 +68,7 @@ class MCPStreamableHttpServer {
    * Handle GET requests (typically used for static files)
    */
   async handleGetRequest(c: any) {
-    console.error("GET request received - StreamableHTTP transport only supports POST");
+    log.debug("GET request received - StreamableHTTP transport only supports POST");
     return c.text('Method Not Allowed', 405, {
       'Allow': 'POST'
     });
@@ -80,7 +80,7 @@ class MCPStreamableHttpServer {
   async handlePostRequest(c: any) {
     const sessionId = c.req.header(SESSION_ID_HEADER_NAME);
     const authHeader = c.req.header('Authorization');
-    console.error(`POST request received ${sessionId ? 'with session ID: ' + sessionId : 'without session ID'}`);
+    log.debug(`POST request received ${sessionId ? 'with session ID: ' + sessionId : 'without session ID'}`);
 
     try {
       const body = await c.req.json();
@@ -98,7 +98,7 @@ class MCPStreamableHttpServer {
         
         // Cleanup when the response ends
         res.on('close', () => {
-          console.error(`Request closed for session ${sessionId}`);
+          log.debug(`Request closed for session ${sessionId}`);
         });
         
         // Convert Node.js response back to Fetch Response
@@ -107,7 +107,7 @@ class MCPStreamableHttpServer {
       
       // Create new transport for initialize requests
       if (!sessionId && this.isInitializeRequest(body)) {
-        console.error("Creating new StreamableHTTP transport for initialize request");
+        log.debug("Creating new StreamableHTTP transport for initialize request");
 
         const transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => uuid(),
@@ -115,14 +115,14 @@ class MCPStreamableHttpServer {
 
         // Add error handler for debug purposes
         transport.onerror = (err) => {
-          console.error('StreamableHTTP transport error:', err);
+          log.error('StreamableHTTP transport error:', err);
         };
 
         // Extract Bearer token from Authorization header
         let bearerToken: string | undefined;
         if (authHeader && authHeader.startsWith('Bearer ')) {
           bearerToken = authHeader.substring(7);
-          console.error('Using Bearer token from Authorization header');
+          log.debug('Bearer token provided via Authorization header');
         }
 
         // Create a new MCP server instance for this session
@@ -137,7 +137,7 @@ class MCPStreamableHttpServer {
         // Store the transport and server if we have a session ID
         const newSessionId = transport.sessionId;
         if (newSessionId) {
-          console.error(`New session established: ${newSessionId}`);
+          log.debug(`New session established: ${newSessionId}`);
           this.transports[newSessionId] = transport;
           this.servers[newSessionId] = newServer;
           this.lastActivity[newSessionId] = Date.now();
@@ -147,14 +147,14 @@ class MCPStreamableHttpServer {
 
           // Set up clean-up for when the transport is closed
           transport.onclose = () => {
-            console.error(`Session closed: ${newSessionId}`);
+            log.debug(`Session closed: ${newSessionId}`);
             this.destroySession(newSessionId);
           };
         }
 
         // Cleanup when the response ends
         res.on('close', () => {
-          console.error(`Request closed for new session`);
+          log.debug(`Request closed for new session`);
         });
 
         // Convert Node.js response back to Fetch Response
@@ -167,7 +167,7 @@ class MCPStreamableHttpServer {
         400
       );
     } catch (error) {
-      console.error('Error handling MCP request:', error);
+      log.error('Error handling MCP request:', error);
       return c.json(
         this.createErrorResponse("Internal server error."),
         500
@@ -281,7 +281,7 @@ export async function setupStreamableHttpServer(port = 3000) {
         return c.text('Not Found', 404);
       }
     } catch (err) {
-      console.error('Error serving static file:', err);
+      log.error('Error serving static file:', err);
       return c.text('Internal Server Error', 500);
     }
     
@@ -293,9 +293,9 @@ export async function setupStreamableHttpServer(port = 3000) {
     fetch: app.fetch,
     port
   }, (info) => {
-    console.error(`MCP StreamableHTTP Server running at http://localhost:${info.port}`);
-    console.error(`- MCP Endpoint: http://localhost:${info.port}/mcp`);
-    console.error(`- Health Check: http://localhost:${info.port}/health`);
+    log.info(`MCP StreamableHTTP Server running at http://localhost:${info.port}`);
+    log.info(`- MCP Endpoint: http://localhost:${info.port}/mcp`);
+    log.info(`- Health Check: http://localhost:${info.port}/health`);
   });
   
   return app;
