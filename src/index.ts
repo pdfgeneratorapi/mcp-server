@@ -906,9 +906,11 @@ function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTyp
     }
     try {
         const zodSchemaString = jsonSchemaToZod(jsonSchema);
-        const zodSchema = eval(zodSchemaString);
-        if (typeof zodSchema?.parse !== 'function') { 
-            throw new Error('Eval did not produce a valid Zod schema.'); 
+        // Use Function constructor instead of eval() to restrict scope.
+        // Only `z` (zod) is available — no access to process, require, globals, etc.
+        const zodSchema = new Function('z', `"use strict"; return (${zodSchemaString});`)(z);
+        if (typeof zodSchema?.parse !== 'function') {
+            throw new Error('Function did not produce a valid Zod schema.');
         }
         return zodSchema as z.ZodTypeAny;
     } catch (err: any) {
