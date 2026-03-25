@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pdf-generator-api": {
+      "command": "npx",
+      "args": ["-y", "@pdfgeneratorapi/mcp-server"],
+      "env": {
+        "API_BASE_URL": "https://us1.pdfgeneratorapi.com/api/v4",
+        "BEARER_TOKEN_JWT": "${BEARER_TOKEN_JWT}"
+      }
+    }
+  }
+}
