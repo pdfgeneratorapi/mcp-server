@@ -41,7 +41,7 @@ describe('createMcpServer', () => {
 
   describe('server configuration', () => {
     it('should use correct server name constant', () => {
-      expect(SERVER_NAME).toBe('ar-api-production');
+      expect(SERVER_NAME).toBe('pdf-generator-api');
     });
 
     it('should use correct server version constant', () => {

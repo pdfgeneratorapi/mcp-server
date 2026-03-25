@@ -38,7 +38,7 @@ export function createMcpServer(bearerToken?: string): Server {
         const toolDefinition = toolDefinitionMap.get(toolName);
         if (!toolDefinition) {
             log.warn(`Unknown tool requested: ${toolName}`);
-            return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }] };
+            return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }], isError: true };
         }
         return await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, bearerToken);
     });

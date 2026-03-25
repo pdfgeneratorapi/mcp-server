@@ -31,10 +31,10 @@ export async function executeApiTool(
     } catch (error: unknown) {
         if (error instanceof ZodError) {
             const validationErrorMessage = `Invalid arguments for tool '${toolName}': ${error.errors.map(e => `${e.path.join('.')} (${e.code}): ${e.message}`).join(', ')}`;
-            return { content: [{ type: 'text', text: validationErrorMessage }] };
+            return { content: [{ type: 'text', text: validationErrorMessage }], isError: true };
         } else {
              const errorMessage = error instanceof Error ? error.message : String(error);
-             return { content: [{ type: 'text', text: `Internal error during validation setup: ${errorMessage}` }] };
+             return { content: [{ type: 'text', text: `Internal error during validation setup: ${errorMessage}` }], isError: true };
         }
     }
 
@@ -104,8 +104,8 @@ export async function executeApiTool(
     if (contentType.includes('application/json') && typeof response.data === 'object' && response.data !== null) {
          try { 
              responseText = JSON.stringify(response.data, null, 2); 
-         } catch (e) { 
-             responseText = "[Stringify Error]"; 
+         } catch {
+             responseText = "[Stringify Error]";
          }
     } 
     // Handle string responses
@@ -151,7 +151,7 @@ export async function executeApiTool(
     log.error(`Error during execution of tool '${toolName}':`, errorMessage);
     
     // Return error message to client
-    return { content: [{ type: "text", text: errorMessage }] };
+    return { content: [{ type: "text", text: errorMessage }], isError: true };
   }
 }
 

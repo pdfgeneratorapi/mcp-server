@@ -1,6 +1,6 @@
-# AR API MCP Server
+# PDF Generator API — MCP Server
 
-Model Context Protocol (MCP) server for the PDF Generator API, generated from the OpenAPI v4 specification.
+Model Context Protocol (MCP) server for the [PDF Generator API](https://pdfgeneratorapi.com), generated from the OpenAPI v4 specification.
 
 ## Overview
 
@@ -22,7 +22,7 @@ npm run build
 ```json
 {
   "mcpServers": {
-    "ar-api": {
+    "pdf-generator-api": {
       "command": "node",
       "args": ["/path/to/mcp-server-v4/build/index.js"],
       "env": {
@@ -34,10 +34,10 @@ npm run build
 }
 ```
 
-**Note**: Replace `/path/to/mcp-server-v4` with your actual path and `your-jwt-token-here` with your PDF Generator API JWT token.
+**Note**: Replace `/path/to/mcp-server-v4` with your actual path and `your-jwt-token-here` with your PDF Generator API JWT token (see [JWT Token Generation](#jwt-token-generation) below).
 
 **Common config locations**:
-- **Claude Desktop**: Settings → Developer → Edit Config
+- **Claude Desktop**: Settings > Developer > Edit Config
 - **Claude Code (CLI)**: `~/.claude/mcp_config.json`
 - **Cline/Roo-Codeium**: `.vscode/mcp_config.json`
 - **Continue**: `~/.continue/config.json`
@@ -61,7 +61,9 @@ docker compose -f deploy/docker-compose.yml up -d
 
 ## Authentication
 
-**HTTP Mode**: Pass the Bearer token in the Authorization header with each request:
+**Stdio Mode**: Pass the JWT token via the `BEARER_TOKEN_JWT` environment variable in your MCP client config.
+
+**HTTP Mode**: Pass the JWT token in the `Authorization` header with each request:
 ```bash
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
@@ -70,37 +72,83 @@ curl -X POST http://localhost:3000/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize",...}'
 ```
 
-**Stdio Mode**: Pass the Bearer token via the `BEARER_TOKEN_JWT` environment variable in your MCP client config.
-
-## Environment Variables
-
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `API_BASE_URL` | No | `https://us1.pdfgeneratorapi.com/api/v4` | PDF Generator API base URL |
-| `PORT` | No | `3000` | Server port (HTTP mode only) |
-| `BEARER_TOKEN_JWT` | No | - | JWT token (stdio mode only) |
-| `LOG_LEVEL` | No | `info` | Logging level |
-
-Create a `.env` file in the repo root:
-```bash
-cp .env.example .env
-```
-
 ## JWT Token Generation
 
-Generate a JWT token using your PDF Generator API credentials:
+You need a JWT token to authenticate with the PDF Generator API. Get your credentials from the [PDF Generator API dashboard](https://app.pdfgeneratorapi.com) under **Account Settings > API Integration**.
+
+You'll need three values:
+- **Workspace ID** (`iss` claim) — your numeric workspace identifier
+- **Workspace Identifier** (`sub` claim) — your workspace email or unique key
+- **Secret Key** — the signing key for your JWT (keep this secret)
+
+See: https://docs.pdfgeneratorapi.com/v4#section/Authentication/Creating-a-JWT
+
+### Node.js
 
 ```javascript
 const jwt = require('jsonwebtoken');
 
 const token = jwt.sign(
-  { iss: 'YOUR_WORKSPACE_ID', sub: 'YOUR_WORKSPACE_IDENTIFIER' },
+  {
+    iss: 'YOUR_WORKSPACE_ID',       // e.g. "12345"
+    sub: 'YOUR_WORKSPACE_IDENTIFIER' // e.g. "user@example.com"
+  },
   'YOUR_SECRET_KEY',
-  { algorithm: 'HS256', expiresIn: '1h' }
+  {
+    algorithm: 'HS256',
+    expiresIn: '24h'  // Token lifetime — see notes below
+  }
 );
+
+console.log(token);
 ```
 
-See: https://docs.pdfgeneratorapi.com/v4#section/Authentication/Creating-a-JWT
+### Quick one-liner (npx)
+
+```bash
+npx jsonwebtoken-cli -- sign \
+  '{"iss":"YOUR_WORKSPACE_ID","sub":"YOUR_WORKSPACE_IDENTIFIER"}' \
+  'YOUR_SECRET_KEY' \
+  --algorithm HS256 \
+  --expiresIn 24h
+```
+
+### Token Expiration (TTL)
+
+Choose a TTL that matches your use case:
+
+| Use case | Recommended TTL | Why |
+|----------|----------------|-----|
+| Local MCP (stdio) | `24h` or longer | MCP sessions can be long-lived; avoids mid-session expiration |
+| Production (HTTP) | `1h` | Shorter-lived tokens reduce risk if leaked |
+| CI/CD or scripts | `5m` – `15m` | Minimal exposure window for automated tasks |
+
+The PDF Generator API validates the token on every request. If the token expires mid-session, subsequent API calls will return `401 Unauthorized` — generate a new token and restart the MCP client.
+
+### Security Best Practices
+
+- **Never commit tokens or secret keys** to version control
+- Use **environment variables** or a secrets manager to store your `BEARER_TOKEN_JWT`
+- **Rotate secret keys** periodically in the PDF Generator API dashboard
+- For HTTP mode, use **HTTPS** in production to protect tokens in transit
+
+See: [PDF Generator API Authentication Docs](https://docs.pdfgeneratorapi.com/v4#section/Authentication/Creating-a-JWT)
+
+## Environment Variables
+
+| Variable | Mode | Default | Description |
+|----------|------|---------|-------------|
+| `API_BASE_URL` | Both | `https://us1.pdfgeneratorapi.com/api/v4` | PDF Generator API base URL |
+| `BEARER_TOKEN_JWT` | Stdio | — | JWT token for authentication |
+| `PORT` | HTTP | `3000` | Server port |
+| `LOG_LEVEL` | Both | `info` | Logging level (`debug`, `info`, `warn`, `error`) |
+| `SESSION_TTL_MINUTES` | HTTP | `30` | Session idle timeout in minutes |
+| `CORS_ORIGIN` | HTTP | `*` (all origins) | Comma-separated allowed origins |
+
+Create a `.env` file in the repo root:
+```bash
+cp .env.example .env
+```
 
 ## Regenerating
 
@@ -117,9 +165,13 @@ To regenerate after OpenAPI spec changes:
 
 ## Testing
 
-Test stdio mode:
 ```bash
 npm run build
+npm test
+```
+
+Test stdio mode manually:
+```bash
 BEARER_TOKEN_JWT="your-token" echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | npm run start:stdio
 ```
 
@@ -128,8 +180,6 @@ Test HTTP mode:
 npm run start:http
 curl http://localhost:3000/health
 ```
-
-See [POSTMAN_TESTING.md](POSTMAN_TESTING.md) for detailed testing instructions with Postman.
 
 ## Resources
 

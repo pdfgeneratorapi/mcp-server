@@ -1,22 +1,27 @@
+# Stage 1: Build (includes devDependencies for TypeScript compilation)
+FROM node:24-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . ./
+RUN npm run build
+
+# Stage 2: Production (only runtime dependencies)
 FROM node:24-alpine
 
 WORKDIR /app
 
-# Copy package files
 COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Install dependencies
-RUN npm ci --only=production
+COPY --from=builder /app/build ./build
+COPY public ./public
 
-# Copy source and build
-COPY . ./
-RUN npm run build
-
-# Expose port
 EXPOSE 3000
 
-# Set environment
 ENV NODE_ENV=production
 
-# Start server
 CMD ["npm", "run", "start:http"]

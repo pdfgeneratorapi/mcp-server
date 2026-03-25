@@ -45,7 +45,7 @@ rm -rf "$OUTPUT_DIR/src" "$OUTPUT_DIR/build"
 openapi-mcp-generator \
   --input "$OPEN_API_INPUT" \
   --output "$OUTPUT_DIR" \
-  --server-name "ar-api-production" \
+  --server-name "pdf-generator-api" \
   --transport streamable-http \
   --port 3000 \
   --force

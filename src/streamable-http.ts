@@ -212,7 +212,7 @@ class MCPStreamableHttpServer {
  * Sets up a web server for the MCP server using StreamableHTTP transport
  *
  * @param port The port to listen on (default: 3000)
- * @returns The Hono app instance
+ * @returns The Hono app instance, the HTTP server, and the actual listening port
  */
 export async function setupStreamableHttpServer(port = 3000) {
   // Create Hono app
@@ -247,7 +247,7 @@ export async function setupStreamableHttpServer(port = 3000) {
       const { fileURLToPath } = await import('url');
       
       const __dirname = path.dirname(fileURLToPath(import.meta.url));
-      const publicPath = path.join(__dirname, '..', '..', 'public');
+      const publicPath = path.join(__dirname, '..', 'public');
       const fullPath = path.join(publicPath, filePath);
       
       // Simple security check to prevent directory traversal
@@ -278,7 +278,7 @@ export async function setupStreamableHttpServer(port = 3000) {
             headers: { 'Content-Type': contentType }
           });
         }
-      } catch (err) {
+      } catch {
         // File not found or other error
         return c.text('Not Found', 404);
       }
@@ -291,7 +291,7 @@ export async function setupStreamableHttpServer(port = 3000) {
   });
   
   // Start the server
-  serve({
+  const server = serve({
     fetch: app.fetch,
     port
   }, (info) => {
@@ -299,6 +299,10 @@ export async function setupStreamableHttpServer(port = 3000) {
     log.info(`- MCP Endpoint: http://localhost:${info.port}/mcp`);
     log.info(`- Health Check: http://localhost:${info.port}/health`);
   });
-  
-  return app;
+
+  // Resolve the actual listening port (useful when port=0)
+  const addr = server.address();
+  const actualPort = typeof addr === 'object' && addr ? addr.port : port;
+
+  return Object.assign(app, { server, port: actualPort });
 }

@@ -69,7 +69,7 @@ describe('HTTP Endpoints', () => {
 
   describe('server constants', () => {
     it('should have correct server name', () => {
-      expect(SERVER_NAME).toBe('ar-api-production');
+      expect(SERVER_NAME).toBe('pdf-generator-api');
     });
 
     it('should have correct server version', () => {

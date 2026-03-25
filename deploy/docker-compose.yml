@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    container_name: ar-mcp-server
+    container_name: pdf-generator-mcp-server
     ports:
       - "3001:3000"
     env_file:
