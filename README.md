@@ -24,7 +24,7 @@ npm run build
   "mcpServers": {
     "pdf-generator-api": {
       "command": "node",
-      "args": ["/path/to/mcp-server-v4/build/index.js"],
+      "args": ["/path/to/mcp-server/build/index.js"],
       "env": {
         "API_BASE_URL": "https://us1.pdfgeneratorapi.com/api/v4",
         "BEARER_TOKEN_JWT": "your-jwt-token-here"
@@ -34,7 +34,7 @@ npm run build
 }
 ```
 
-**Note**: Replace `/path/to/mcp-server-v4` with your actual path and `your-jwt-token-here` with your PDF Generator API JWT token (see [JWT Token Generation](#jwt-token-generation) below).
+**Note**: Replace `/path/to/mcp-server` with your actual path and `your-jwt-token-here` with your PDF Generator API JWT token (see [JWT Token Generation](#jwt-token-generation) below).
 
 **Common config locations**:
 - **Claude Desktop**: Settings > Developer > Edit Config
