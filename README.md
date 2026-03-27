@@ -42,6 +42,27 @@ npm run build
 - **Cline/Roo-Codeium**: `.vscode/mcp_config.json`
 - **Continue**: `~/.continue/config.json`
 
+### Remote MCP Server (Streamable HTTP)
+
+If you have a deployed MCP server (e.g. `https://mcp.example.com`), you can connect to it directly from your MCP client without running anything locally.
+
+**Claude Code** (`~/.claude/mcp_config.json`):
+```json
+{
+  "mcpServers": {
+    "pdf-generator-api": {
+      "type": "streamable-http",
+      "url": "https://mcp.pdfgeneratorapi.com/mcp",
+      "headers": {
+        "Authorization": "Bearer your-jwt-token-here"
+      }
+    }
+  }
+}
+```
+
+**Note**: For remote servers, use a long-lived JWT token (e.g. `--expiresIn 30d`) to avoid mid-session expiration. See [JWT Token Generation](#jwt-token-generation) for how to create one. Restart your MCP client after updating the config.
+
 ### Production Deployment (HTTP Mode)
 
 **Run locally**:
