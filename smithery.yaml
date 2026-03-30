@@ -1,17 +1,12 @@
 startCommand:
-  type: stdio
+  type: http
   configSchema:
     type: object
+    description: Connect to the PDF Generator API MCP server. Authentication is handled via the Authorization header with a JWT bearer token.
     properties:
-      apiBaseUrl:
-        type: string
-        title: API Base URL
-        description: PDF Generator API endpoint URL
-        default: "https://us1.pdfgeneratorapi.com/api/v4"
       bearerTokenJwt:
         type: string
         title: Bearer Token (JWT)
         description: JWT bearer token for PDF Generator API authentication
     required: []
-  commandFunction:
-    ref: smithery.js#default
+  exampleConfig: {}
