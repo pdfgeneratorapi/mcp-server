@@ -1,0 +1,17 @@
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      apiBaseUrl:
+        type: string
+        title: API Base URL
+        description: PDF Generator API endpoint URL
+        default: "https://us1.pdfgeneratorapi.com/api/v4"
+      bearerTokenJwt:
+        type: string
+        title: Bearer Token (JWT)
+        description: JWT bearer token for PDF Generator API authentication
+    required: []
+  commandFunction:
+    ref: smithery.js#default

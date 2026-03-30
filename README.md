@@ -61,6 +61,25 @@ If you have a deployed MCP server (e.g. `https://mcp.example.com`), you can conn
 }
 ```
 
+**Claude Desktop** (`claude_desktop_config.json`):
+
+Claude Desktop does not support `streamable-http` directly. Use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) as a bridge:
+```json
+{
+  "mcpServers": {
+    "pdf-generator-api": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.pdfgeneratorapi.com/mcp",
+        "--header",
+        "Authorization: Bearer your-jwt-token-here"
+      ]
+    }
+  }
+}
+```
+
 **Note**: For remote servers, use a long-lived JWT token (e.g. `--expiresIn 30d`) to avoid mid-session expiration. See [JWT Token Generation](#jwt-token-generation) for how to create one. Restart your MCP client after updating the config.
 
 ### Production Deployment (HTTP Mode)
