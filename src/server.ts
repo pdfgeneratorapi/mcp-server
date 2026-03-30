@@ -18,55 +18,55 @@ import { executeApiTool } from './execute.js';
  * Tool annotations — hints for MCP clients about tool behavior
  */
 const toolAnnotations: Record<string, { title: string; readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean }> = {
-    getStatus:                          { title: "Get API Status",                      readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    addWatermark:                       { title: "Add Watermark to PDF",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    encryptDocument:                    { title: "Encrypt PDF Document",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    decryptDocument:                    { title: "Decrypt PDF Document",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    optimizeDocument:                   { title: "Optimize PDF Size",                   readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    makeAccessible:                     { title: "Add Accessibility Tags to PDF",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    extractFormFields:                  { title: "Extract Form Fields from PDF",        readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    fillFormFields:                     { title: "Fill PDF Form Fields",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    getTemplates:                       { title: "List Templates",                      readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    createTemplate:                     { title: "Create Template",                     readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    getTemplateSchema:                  { title: "Get Template JSON Schema",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    importTemplate:                     { title: "Import PDF as Template",              readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    validateTemplate:                   { title: "Validate Template Configuration",     readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    getTemplate:                        { title: "Get Template Details",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    updateTemplate:                     { title: "Update Template",                     readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    deleteTemplate:                     { title: "Delete Template",                     readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
-    getTemplateData:                    { title: "Get Template Data Fields",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    copyTemplate:                       { title: "Copy Template",                       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    openEditor:                         { title: "Open Template Editor",                readOnlyHint: true,  destructiveHint: false,                        openWorldHint: true },
-    listTemplateVersions:               { title: "List Template Versions",              readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    getTemplateVersion:                 { title: "Get Template Version",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    deleteTemplateVersion:              { title: "Delete Template Version",             readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
-    promoteTemplateVersion:             { title: "Promote Template Version",            readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    getDocuments:                       { title: "List Generated Documents",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    getDocument:                        { title: "Get Document Details",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    deleteDocument:                     { title: "Delete Document",                     readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
-    generateDocument:                   { title: "Generate PDF Document",               readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    generateDocumentAsynchronous:       { title: "Generate PDF Document (Async)",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    generateDocumentBatch:              { title: "Generate Batch PDF Documents",        readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    generateDocumentBatchAsynchronous:  { title: "Generate Batch PDFs (Async)",         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    getAsyncJobStatus:                  { title: "Get Async Job Status",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    getWorkspaces:                      { title: "List Workspaces",                     readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    createWorkspace:                    { title: "Create Workspace",                    readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    getWorkspace:                       { title: "Get Workspace Details",               readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    deleteWorkspace:                    { title: "Delete Workspace",                    readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
-    convertHTML2PDF:                    { title: "Convert HTML to PDF",                 readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    convertURL2PDF:                     { title: "Convert URL to PDF",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    getForms:                           { title: "List Forms",                          readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    createForm:                         { title: "Create Form",                         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    importForm:                         { title: "Import PDF as Form",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    getForm:                            { title: "Get Form Details",                    readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    updateForm:                         { title: "Update Form",                         readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    deleteForm:                         { title: "Delete Form",                         readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
-    shareForm:                          { title: "Create Form Sharing URL",             readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    generateQRCode:                     { title: "Generate QR Code",                    readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    createEInvoice:                     { title: "Create E-Invoice (UBL/CII)",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    createXRechnungEInvoice:            { title: "Create XRechnung E-Invoice",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    createFacturXEInvoice:              { title: "Create Factur-X E-Invoice",           readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    getEInvoiceSchema:                  { title: "Get E-Invoice JSON Schema",           readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_status:                          { title: "Get API Status",                      readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    add_watermark:                       { title: "Add Watermark to PDF",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    encrypt_document:                    { title: "Encrypt PDF Document",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    decrypt_document:                    { title: "Decrypt PDF Document",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    optimize_document:                   { title: "Optimize PDF Size",                   readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    make_accessible:                     { title: "Add Accessibility Tags to PDF",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    extract_form_fields:                  { title: "Extract Form Fields from PDF",        readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    fill_form_fields:                     { title: "Fill PDF Form Fields",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_templates:                       { title: "List Templates",                      readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    create_template:                     { title: "Create Template",                     readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_template_schema:                  { title: "Get Template JSON Schema",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    import_template:                     { title: "Import PDF as Template",              readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    validate_template:                   { title: "Validate Template Configuration",     readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_template:                        { title: "Get Template Details",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    update_template:                     { title: "Update Template",                     readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    delete_template:                     { title: "Delete Template",                     readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
+    get_template_data:                    { title: "Get Template Data Fields",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    copy_template:                       { title: "Copy Template",                       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    open_editor:                         { title: "Open Template Editor",                readOnlyHint: true,  destructiveHint: false,                        openWorldHint: true },
+    list_template_versions:               { title: "List Template Versions",              readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_template_version:                 { title: "Get Template Version",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    delete_template_version:              { title: "Delete Template Version",             readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
+    promote_template_version:             { title: "Promote Template Version",            readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_documents:                       { title: "List Generated Documents",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_document:                        { title: "Get Document Details",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    delete_document:                     { title: "Delete Document",                     readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
+    generate_document:                   { title: "Generate PDF Document",               readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    generate_document_async:       { title: "Generate PDF Document (Async)",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    generate_document_batch:              { title: "Generate Batch PDF Documents",        readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    generate_document_batch_async:  { title: "Generate Batch PDFs (Async)",         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_async_job_status:                  { title: "Get Async Job Status",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_workspaces:                      { title: "List Workspaces",                     readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    create_workspace:                    { title: "Create Workspace",                    readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_workspace:                       { title: "Get Workspace Details",               readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    delete_workspace:                    { title: "Delete Workspace",                    readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
+    convert_html_to_pdf:                    { title: "Convert HTML to PDF",                 readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    convert_url_to_pdf:                     { title: "Convert URL to PDF",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_forms:                           { title: "List Forms",                          readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    create_form:                         { title: "Create Form",                         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    import_form:                         { title: "Import PDF as Form",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_form:                            { title: "Get Form Details",                    readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    update_form:                         { title: "Update Form",                         readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    delete_form:                         { title: "Delete Form",                         readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
+    share_form:                          { title: "Create Form Sharing URL",             readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    generate_qr_code:                     { title: "Generate QR Code",                    readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    create_einvoice:                     { title: "Create E-Invoice (UBL/CII)",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    create_xrechnung_einvoice:            { title: "Create XRechnung E-Invoice",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    create_facturx_einvoice:              { title: "Create Factur-X E-Invoice",           readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_einvoice_schema:                  { title: "Get E-Invoice JSON Schema",           readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
 };
 
 /**
@@ -115,7 +115,7 @@ export function createMcpServer(bearerToken?: string): Server {
         },
         {
             capabilities: { tools: {}, prompts: {} },
-            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with getTemplates, then generate documents with generateDocument. Authentication is handled via JWT bearer token.",
+            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with get_templates, then generate documents with generate_document. Authentication is handled via JWT bearer token.",
         }
     );
 
@@ -152,7 +152,7 @@ export function createMcpServer(bearerToken?: string): Server {
             return {
                 messages: [{
                     role: "user" as const,
-                    content: { type: "text" as const, text: `Generate a PDF document using template ID ${templateId}. First, call getTemplateData with templateId ${templateId} to see the required data fields, then call generateDocument with the template ID, appropriate data, and output format "${outputFormat}".` }
+                    content: { type: "text" as const, text: `Generate a PDF document using template ID ${templateId}. First, call get_template_data with templateId ${templateId} to see the required data fields, then call generate_document with the template ID, appropriate data, and output format "${outputFormat}".` }
                 }]
             };
         }
@@ -167,8 +167,8 @@ export function createMcpServer(bearerToken?: string): Server {
                     content: {
                         type: "text" as const,
                         text: isUrl
-                            ? `Convert the URL "${source}" to a PDF document using convertURL2PDF with paper size "${paperSize}" and portrait orientation.`
-                            : `Convert the following HTML content to a PDF document using convertHTML2PDF with paper size "${paperSize}" and portrait orientation:\n\n${source}`
+                            ? `Convert the URL "${source}" to a PDF document using convert_url_to_pdf with paper size "${paperSize}" and portrait orientation.`
+                            : `Convert the following HTML content to a PDF document using convert_html_to_pdf with paper size "${paperSize}" and portrait orientation:\n\n${source}`
                     }
                 }]
             };
@@ -176,13 +176,13 @@ export function createMcpServer(bearerToken?: string): Server {
 
         if (name === "create-einvoice") {
             const format = (args?.format || "UBL").toUpperCase();
-            const tool = format === "FACTUR-X" || format === "FACTURX" ? "createFacturXEInvoice"
-                : format === "XRECHNUNG" ? "createXRechnungEInvoice"
-                : "createEInvoice";
+            const tool = format === "FACTUR-X" || format === "FACTURX" ? "create_facturx_einvoice"
+                : format === "XRECHNUNG" ? "create_xrechnung_einvoice"
+                : "create_einvoice";
             return {
                 messages: [{
                     role: "user" as const,
-                    content: { type: "text" as const, text: `Create an e-invoice in ${format} format. First, call getEInvoiceSchema to get the required data structure, then use ${tool} to generate the e-invoice.` }
+                    content: { type: "text" as const, text: `Create an e-invoice in ${format} format. First, call get_einvoice_schema to get the required data structure, then use ${tool} to generate the e-invoice.` }
                 }]
             };
         }
