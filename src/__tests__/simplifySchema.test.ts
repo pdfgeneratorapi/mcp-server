@@ -3,6 +3,7 @@
  */
 
 import { simplifySchemaForOpenAI } from '../index.js';
+import { toolDefinitionMap } from '../tools.js';
 
 describe('simplifySchemaForOpenAI', () => {
   describe('basic input handling', () => {
@@ -342,5 +343,131 @@ describe('simplifySchemaForOpenAI', () => {
       expect(result.properties.requestBody.required).toBeUndefined();
       expect(result.properties.requestBody.properties.watermark.properties.text.required).toBeUndefined();
     });
+  });
+
+  describe('enum sanitization', () => {
+    it('removes empty-string values from a string enum', () => {
+      const result = simplifySchemaForOpenAI({
+        type: 'string',
+        enum: ['private', 'organization', '']
+      });
+      expect(result.enum).toEqual(['private', 'organization']);
+    });
+
+    it('drops a default that is no longer a valid enum member', () => {
+      const result = simplifySchemaForOpenAI({
+        type: 'string',
+        enum: ['private', 'organization', ''],
+        default: ''
+      });
+      expect(result.enum).toEqual(['private', 'organization']);
+      expect('default' in result).toBe(false);
+    });
+
+    it('keeps a default that is still a valid enum member', () => {
+      const result = simplifySchemaForOpenAI({
+        type: 'string',
+        enum: ['private', 'organization', ''],
+        default: 'private'
+      });
+      expect(result.enum).toEqual(['private', 'organization']);
+      expect(result.default).toBe('private');
+    });
+
+    it('removes the enum entirely when it becomes empty', () => {
+      const result = simplifySchemaForOpenAI({
+        type: 'string',
+        enum: [''],
+        default: ''
+      });
+      expect('enum' in result).toBe(false);
+      expect('default' in result).toBe(false);
+      expect(result.type).toBe('string');
+    });
+
+    it('sanitizes enums nested under properties', () => {
+      const result = simplifySchemaForOpenAI({
+        type: 'object',
+        properties: {
+          access: {
+            type: 'string',
+            enum: ['private', 'organization', ''],
+            default: ''
+          }
+        }
+      });
+      expect(result.properties.access.enum).toEqual(['private', 'organization']);
+      expect('default' in result.properties.access).toBe(false);
+    });
+
+    it('sanitizes enums nested under array items', () => {
+      const result = simplifySchemaForOpenAI({
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: ['a', 'b', '']
+        }
+      });
+      expect(result.items.enum).toEqual(['a', 'b']);
+    });
+
+    it('leaves enums without empty strings unchanged', () => {
+      const result = simplifySchemaForOpenAI({
+        type: 'string',
+        enum: ['private', 'organization']
+      });
+      expect(result.enum).toEqual(['private', 'organization']);
+    });
+
+    it('handles the real-world get_templates access schema', () => {
+      const schema = {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Filter template by name' },
+          tags: { type: 'string', description: 'Filter template by tags' },
+          access: {
+            type: 'string',
+            enum: ['private', 'organization', ''],
+            default: '',
+            description: 'Filter template by access type. No values returns all templates.'
+          },
+          page: { type: 'number', default: 1 },
+          per_page: { type: 'number', default: 15 }
+        }
+      };
+      const result = simplifySchemaForOpenAI(schema);
+      expect(result.properties.access.enum).toEqual(['private', 'organization']);
+      expect('default' in result.properties.access).toBe(false);
+      // Numeric defaults on unrelated fields must be untouched.
+      expect(result.properties.page.default).toBe(1);
+      expect(result.properties.per_page.default).toBe(15);
+    });
+  });
+});
+
+describe('tool schemas are Gemini-compatible (no empty-string enums)', () => {
+  // Recursively collect every `enum` array reachable from a schema node.
+  function collectEnums(node: any, enums: any[][] = []): any[][] {
+    if (!node || typeof node !== 'object') return enums;
+    if (Array.isArray(node)) {
+      for (const item of node) collectEnums(item, enums);
+      return enums;
+    }
+    if (Array.isArray(node.enum)) enums.push(node.enum);
+    for (const value of Object.values(node)) collectEnums(value, enums);
+    return enums;
+  }
+
+  // Mirrors Gemini's assertNoEmptyStringEnums check across every tool's
+  // client-facing schema, so a future spec regeneration can't reintroduce the bug.
+  it('no sanitized tool schema contains an empty-string enum value', () => {
+    const offenders: string[] = [];
+    for (const [name, def] of toolDefinitionMap) {
+      const sanitized = simplifySchemaForOpenAI(def.inputSchema);
+      for (const enumValues of collectEnums(sanitized)) {
+        if (enumValues.includes('')) offenders.push(name);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

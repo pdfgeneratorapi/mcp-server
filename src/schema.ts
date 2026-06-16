@@ -71,6 +71,21 @@ export function simplifySchemaForOpenAI(schema: any): any {
         simplified.items = simplifySchemaForOpenAI(simplified.items);
     }
 
+    // Strip empty-string enum values — Google Gemini rejects "" as an enum value at
+    // tool-registration time (assertNoEmptyStringEnums). OpenAPI encodes a "no filter /
+    // return all" option as "" (e.g. get_templates.access); omitting the parameter
+    // expresses the same intent, so the field simply becomes optional.
+    if (Array.isArray(simplified.enum)) {
+        simplified.enum = simplified.enum.filter((value: unknown) => value !== '');
+        if (simplified.enum.length === 0) {
+            delete simplified.enum;
+        }
+        // Drop a default that is no longer a valid enum member (e.g. default: "").
+        if ('default' in simplified && (!simplified.enum || !simplified.enum.includes(simplified.default))) {
+            delete simplified.default;
+        }
+    }
+
     // Remove unsupported keywords
     delete simplified.$ref;
     delete simplified.$schema;
