@@ -15,12 +15,17 @@ import { toReqRes, toFetchResponse } from 'fetch-to-node';
 import { SERVER_NAME, SERVER_VERSION } from './config.js';
 import { createMcpServer } from './server.js';
 import { log } from './logger.js';
+import { loadAuthConfig, type AuthConfig } from './auth/config.js';
+import { buildProtectedResourceMetadata } from './auth/protectedResourceMetadata.js';
+import { requireBearerToken } from './auth/middleware.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
 const JSON_RPC = "2.0";
 const SESSION_TTL_MS = parseInt(process.env.SESSION_TTL_MINUTES || '30', 10) * 60 * 1000;
 const SESSION_CLEANUP_INTERVAL_MS = 60 * 1000; // Check every minute
+const WELL_KNOWN_PROTECTED_RESOURCE_PATH = '/.well-known/oauth-protected-resource';
+const METADATA_CACHE_CONTROL = 'public, max-age=3600';
 
 /**
  * StreamableHTTP MCP Server handler
@@ -209,20 +214,22 @@ class MCPStreamableHttpServer {
 }
 
 /**
- * Sets up a web server for the MCP server using StreamableHTTP transport
+ * Builds the Hono app with every route, without listening, so tests can drive it
  *
- * @param port The port to listen on (default: 3000)
- * @returns The Hono app instance, the HTTP server, and the actual listening port
+ * @param authConfig OAuth configuration (read from the environment by default)
+ * @returns The Hono app instance
  */
-export async function setupStreamableHttpServer(port = 3000) {
-  // Create Hono app
+export function createHttpApp(authConfig: AuthConfig = loadAuthConfig()) {
   const app = new Hono();
+  const protectedResourceMetadata = buildProtectedResourceMetadata(authConfig);
 
   // Enable CORS - restrict origins in production via CORS_ORIGIN env var
   // e.g. CORS_ORIGIN="https://example.com,https://app.example.com"
+  // Browser clients can only read the challenge and the session id when they are exposed.
   const corsOrigin = process.env.CORS_ORIGIN;
   app.use('*', cors({
     origin: corsOrigin ? corsOrigin.split(',').map(o => o.trim()) : '*',
+    exposeHeaders: ['WWW-Authenticate', 'Mcp-Session-Id'],
   }));
 
   // Create MCP handler (creates new server instances per session)
@@ -232,8 +239,17 @@ export async function setupStreamableHttpServer(port = 3000) {
   app.get('/health', (c) => {
     return c.json({ status: 'OK', server: SERVER_NAME, version: SERVER_VERSION });
   });
-  
+
+  // Discovery must stay unauthenticated, and must be registered before the static catch-all
+  // below, which would otherwise answer these paths with index.html.
+  const serveProtectedResourceMetadata = (c: any) =>
+    c.json(protectedResourceMetadata, 200, { 'Cache-Control': METADATA_CACHE_CONTROL });
+  app.get(authConfig.resourceMetadataPath, serveProtectedResourceMetadata);
+  app.get(WELL_KNOWN_PROTECTED_RESOURCE_PATH, serveProtectedResourceMetadata);
+  app.all('/.well-known/*', (c) => c.json({ error: 'not_found' }, 404));
+
   // Main MCP endpoint supporting both GET and POST
+  app.use('/mcp', requireBearerToken(authConfig));
   app.get("/mcp", (c) => mcpHandler.handleGetRequest(c));
   app.post("/mcp", (c) => mcpHandler.handlePostRequest(c));
   
@@ -289,7 +305,19 @@ export async function setupStreamableHttpServer(port = 3000) {
     
     return c.text('Not Found', 404);
   });
-  
+
+  return app;
+}
+
+/**
+ * Sets up a web server for the MCP server using StreamableHTTP transport
+ *
+ * @param port The port to listen on (default: 3000)
+ * @returns The Hono app instance, the HTTP server, and the actual listening port
+ */
+export async function setupStreamableHttpServer(port = 3000) {
+  const app = createHttpApp();
+
   // Start the server
   const server = serve({
     fetch: app.fetch,
