@@ -16,14 +16,22 @@ export interface AuthConfig {
   resourceMetadataPath: string;
   /** Absolute URL of the protected resource metadata document. */
   resourceMetadataUrl: string;
+  /** Overrides discovery of the signing keys through the authorization server metadata. */
+  jwksUri?: string;
 }
 
 export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig {
   const resource = env.MCP_RESOURCE_URL ?? DEFAULT_RESOURCE;
   const issuer = env.OAUTH_ISSUER ?? DEFAULT_ISSUER;
 
+  const jwksUri = env.OAUTH_JWKS_URI || undefined;
+
   const resourceUrl = parseServerUrl('MCP_RESOURCE_URL', resource);
   parseServerUrl('OAUTH_ISSUER', issuer);
+
+  if (jwksUri !== undefined) {
+    parseServerUrl('OAUTH_JWKS_URI', jwksUri);
+  }
 
   if (issuer.endsWith('/')) {
     throw new Error(`OAUTH_ISSUER must not end with a slash: "${issuer}"`);
@@ -37,6 +45,7 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig
     issuer,
     resourceMetadataPath,
     resourceMetadataUrl: `${resourceUrl.origin}${resourceMetadataPath}`,
+    jwksUri,
   };
 }
 

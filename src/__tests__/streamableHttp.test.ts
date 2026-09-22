@@ -15,6 +15,9 @@ const { SERVER_NAME, SERVER_VERSION } = await import('../config.js');
 
 // Every request to /mcp must carry a bearer token
 const AUTHORIZATION = { 'Authorization': 'Bearer test-token' };
+const acceptingVerifier = {
+  verify: async (token: string) => ({ token, clientId: 'test-client', scopes: [], extra: {} }),
+};
 
 // Servers to close after all tests
 const servers: any[] = [];
@@ -29,7 +32,7 @@ describe('setupStreamableHttpServer', () => {
   let baseUrl: string;
 
   it('should create an app instance and return port info', async () => {
-    app = await setupStreamableHttpServer(0);
+    app = await setupStreamableHttpServer(0, { verifier: acceptingVerifier });
     servers.push(app.server);
     baseUrl = `http://localhost:${app.port}`;
     expect(app).toBeDefined();
@@ -205,7 +208,7 @@ describe('MCP session lifecycle (real HTTP)', () => {
   let baseUrl: string;
 
   it('should initialize, reuse session, and handle tools/list', async () => {
-    app = await setupStreamableHttpServer(0);
+    app = await setupStreamableHttpServer(0, { verifier: acceptingVerifier });
     servers.push(app.server);
     baseUrl = `http://localhost:${app.port}`;
 
@@ -330,7 +333,7 @@ describe('setupStreamableHttpServer with custom CORS', () => {
 
   it('should restrict CORS when CORS_ORIGIN is set', async () => {
     process.env.CORS_ORIGIN = 'https://example.com,https://app.example.com';
-    const corsApp = await setupStreamableHttpServer(0);
+    const corsApp = await setupStreamableHttpServer(0, { verifier: acceptingVerifier });
     servers.push(corsApp.server);
 
     const res = await fetch(`http://localhost:${corsApp.port}/health`, {

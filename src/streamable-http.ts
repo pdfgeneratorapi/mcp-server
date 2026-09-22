@@ -15,9 +15,13 @@ import { toReqRes, toFetchResponse } from 'fetch-to-node';
 import { SERVER_NAME, SERVER_VERSION } from './config.js';
 import { createMcpServer } from './server.js';
 import { log } from './logger.js';
+import type { IncomingMessage } from 'node:http';
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { loadAuthConfig, type AuthConfig } from './auth/config.js';
 import { buildProtectedResourceMetadata } from './auth/protectedResourceMetadata.js';
 import { requireBearerToken } from './auth/middleware.js';
+import { createRemoteKeySetProvider } from './auth/asMetadata.js';
+import { createTokenVerifier, type TokenVerifier } from './auth/verifier.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
@@ -92,8 +96,10 @@ class MCPStreamableHttpServer {
     try {
       const body = await c.req.json();
       
-      // Convert Fetch Request to Node.js req/res
+      // Convert Fetch Request to Node.js req/res, carrying the verified token to the transport,
+      // which hands it to request handlers as extra.authInfo
       const { req, res } = toReqRes(c.req.raw);
+      (req as IncomingMessage & { auth?: AuthInfo }).auth = c.get('authInfo');
       
       // Reuse existing transport if we have a session ID
       if (sessionId && this.transports[sessionId]) {
@@ -219,7 +225,7 @@ class MCPStreamableHttpServer {
  * @param authConfig OAuth configuration (read from the environment by default)
  * @returns The Hono app instance
  */
-export function createHttpApp(authConfig: AuthConfig = loadAuthConfig()) {
+export function createHttpApp(authConfig: AuthConfig = loadAuthConfig(), verifier: TokenVerifier = remoteTokenVerifier(authConfig)) {
   const app = new Hono();
   const protectedResourceMetadata = buildProtectedResourceMetadata(authConfig);
 
@@ -249,7 +255,7 @@ export function createHttpApp(authConfig: AuthConfig = loadAuthConfig()) {
   app.all('/.well-known/*', (c) => c.json({ error: 'not_found' }, 404));
 
   // Main MCP endpoint supporting both GET and POST
-  app.use('/mcp', requireBearerToken(authConfig));
+  app.use('/mcp', requireBearerToken(authConfig, verifier));
   app.get("/mcp", (c) => mcpHandler.handleGetRequest(c));
   app.post("/mcp", (c) => mcpHandler.handlePostRequest(c));
   
@@ -309,14 +315,27 @@ export function createHttpApp(authConfig: AuthConfig = loadAuthConfig()) {
   return app;
 }
 
+function remoteTokenVerifier(authConfig: AuthConfig): TokenVerifier {
+  return createTokenVerifier({
+    issuer: authConfig.issuer,
+    audience: authConfig.resource,
+    keySet: createRemoteKeySetProvider(authConfig),
+  });
+}
+
 /**
  * Sets up a web server for the MCP server using StreamableHTTP transport
  *
  * @param port The port to listen on (default: 3000)
+ * @param options Overrides for the OAuth configuration and token verifier (tests)
  * @returns The Hono app instance, the HTTP server, and the actual listening port
  */
-export async function setupStreamableHttpServer(port = 3000) {
-  const app = createHttpApp();
+export async function setupStreamableHttpServer(
+  port = 3000,
+  options: { authConfig?: AuthConfig; verifier?: TokenVerifier } = {},
+) {
+  const authConfig = options.authConfig ?? loadAuthConfig();
+  const app = createHttpApp(authConfig, options.verifier ?? remoteTokenVerifier(authConfig));
 
   // Start the server
   const server = serve({

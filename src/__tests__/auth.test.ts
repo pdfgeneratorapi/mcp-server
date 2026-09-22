@@ -11,12 +11,17 @@ const { loadAuthConfig } = await import('../auth/config.js');
 const { buildProtectedResourceMetadata } = await import('../auth/protectedResourceMetadata.js');
 const { challenges } = await import('../auth/challenges.js');
 const { createHttpApp } = await import('../streamable-http.js');
+const { InvalidTokenError, AuthorizationServerUnavailableError } = await import('../auth/errors.js');
 
 const RESOURCE = 'https://mcp.example.test/mcp';
 const ISSUER = 'https://auth.example.test';
 const METADATA_URL = 'https://mcp.example.test/.well-known/oauth-protected-resource/mcp';
 
 const config = loadAuthConfig({ MCP_RESOURCE_URL: RESOURCE, OAUTH_ISSUER: ISSUER });
+
+const acceptingVerifier = {
+  verify: async (token: string) => ({ token, clientId: '17', scopes: [], extra: { sub: '4821', workspaceId: 4821 } }),
+};
 
 describe('loadAuthConfig', () => {
   it('defaults to the production resource and issuer', () => {
@@ -59,6 +64,18 @@ describe('loadAuthConfig', () => {
     ['an empty value', ''],
   ])('refuses to start with a resource carrying %s', (_label, resource) => {
     expect(() => loadAuthConfig({ MCP_RESOURCE_URL: resource, OAUTH_ISSUER: ISSUER })).toThrow(/MCP_RESOURCE_URL/);
+  });
+
+  it('discovers the signing keys unless OAUTH_JWKS_URI overrides them', () => {
+    const jwksUri = 'https://keys.example.test/jwks.json';
+
+    expect(config.jwksUri).toBeUndefined();
+    expect(loadAuthConfig({ MCP_RESOURCE_URL: RESOURCE, OAUTH_ISSUER: ISSUER, OAUTH_JWKS_URI: jwksUri }).jwksUri).toBe(jwksUri);
+  });
+
+  it('refuses to start with a JWKS override over plain http to a public host', () => {
+    expect(() => loadAuthConfig({ MCP_RESOURCE_URL: RESOURCE, OAUTH_ISSUER: ISSUER, OAUTH_JWKS_URI: 'http://keys.example.test/jwks.json' }))
+      .toThrow(/OAUTH_JWKS_URI/);
   });
 
   it.each([
@@ -139,7 +156,7 @@ describe('challenges', () => {
 });
 
 describe('HTTP app', () => {
-  const app = createHttpApp(config);
+  const app = createHttpApp(config, acceptingVerifier);
 
   it.each([
     ['the path-inserted form', '/.well-known/oauth-protected-resource/mcp'],
@@ -187,6 +204,32 @@ describe('HTTP app', () => {
     const res = await app.request('/mcp', { method: 'POST', body: '{}', headers: { Authorization: 'bearer abc.def-ghi_jkl~' } });
 
     expect(res.status).not.toBe(401);
+  });
+
+  it('challenges a token the verifier rejects, whatever the reason', async () => {
+    const rejecting = createHttpApp(config, { verify: async () => { throw new InvalidTokenError('expired'); } });
+
+    const res = await rejecting.request('/mcp', { method: 'POST', body: '{}', headers: { Authorization: 'Bearer abc.def.ghi' } });
+
+    expect(res.status).toBe(401);
+    expect(res.headers.get('www-authenticate')).toBe(challenges.invalidToken(METADATA_URL).wwwAuthenticate);
+    expect(await res.json()).toEqual(challenges.invalidToken(METADATA_URL).body);
+  });
+
+  /**
+   * A 401 here would send clients into a new login that cannot succeed either.
+   */
+  it('answers 503 when the authorization server cannot be reached', async () => {
+    const unavailable = createHttpApp(config, {
+      verify: async () => { throw new AuthorizationServerUnavailableError('jwks unreachable'); },
+    });
+
+    const res = await unavailable.request('/mcp', { method: 'POST', body: '{}', headers: { Authorization: 'Bearer abc.def.ghi' } });
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get('retry-after')).toBe('30');
+    expect(res.headers.get('www-authenticate')).toBeNull();
+    expect((await res.json()).error).toBe('temporarily_unavailable');
   });
 
   it('lets browser clients read the challenge and the session id', async () => {
