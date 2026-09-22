@@ -27,6 +27,14 @@ function makeTool(overrides: Partial<McpToolDefinition> = {}): McpToolDefinition
   };
 }
 
+function toArrayBuffer(buffer: Buffer): ArrayBuffer {
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+}
+
+function jsonBytes(value: unknown): ArrayBuffer {
+  return toArrayBuffer(Buffer.from(JSON.stringify(value)));
+}
+
 function upstreamAuth(...tokens: string[]) {
   let call = 0;
 
@@ -184,6 +192,65 @@ describe('executeApiTool', () => {
     await executeApiTool('testTool', tool, { 'X-Request-Id': 'abc' });
 
     expect((mockAxios.mock.calls[0][0] as any).headers['x-request-id']).toBe('abc');
+  });
+
+  it('should ask the API for the raw response bytes', async () => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: jsonBytes({}) });
+
+    await executeApiTool('testTool', makeTool(), {});
+
+    expect((mockAxios.mock.calls[0][0] as any).responseType).toBe('arraybuffer');
+  });
+
+  it('should pretty-print a JSON body that arrives as bytes', async () => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json; charset=utf-8' }, data: jsonBytes({ name: 'Ångström' }) });
+
+    const result = await executeApiTool('testTool', makeTool(), {});
+
+    expect((result.content[0] as any).text).toContain('"name": "Ångström"');
+  });
+
+  /**
+   * Decoding a PDF as text replaces every invalid UTF-8 sequence, so the file could never
+   * be recovered; binary bodies must reach the client byte for byte.
+   */
+  it('should return a binary body intact as an embedded resource', async () => {
+    const pdf = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.from([0x00, 0xff, 0xfe, 0x80, 0xc3, 0x28, 0xa0, 0xa1]), Buffer.from('\n%%EOF')]);
+    mockAxios.mockResolvedValue({
+      status: 201,
+      headers: { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="INV-2026-001.pdf"' },
+      data: toArrayBuffer(pdf),
+    });
+
+    const result = await executeApiTool('testTool', makeTool(), {});
+
+    expect(result.isError).toBeFalsy();
+    const resource = (result.content as any[]).find(item => item.type === 'resource').resource;
+    expect(resource.mimeType).toBe('application/pdf');
+    expect(resource.uri).toContain('INV-2026-001.pdf');
+    expect(Buffer.from(resource.blob, 'base64').equals(pdf)).toBe(true);
+    expect((result.content[0] as any).text).toContain(`${pdf.length} bytes`);
+  });
+
+  it('should decode a text body that arrives as bytes', async () => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/xml' }, data: toArrayBuffer(Buffer.from('<Invoice>€</Invoice>')) });
+
+    const result = await executeApiTool('testTool', makeTool(), {});
+
+    expect((result.content[0] as any).text).toContain('<Invoice>€</Invoice>');
+  });
+
+  it('should still explain an API error whose body arrives as bytes', async () => {
+    mockAxios.mockRejectedValue(Object.assign(new Error('Request failed with status code 422'), {
+      isAxiosError: true,
+      response: { status: 422, statusText: 'Unprocessable Entity', data: jsonBytes({ message: 'The template id is invalid.' }), headers: { 'content-type': 'application/json' } },
+      config: {},
+    }));
+
+    const result = await executeApiTool('testTool', makeTool(), {});
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as any).text).toContain('The template id is invalid.');
   });
 
   it('should replace path parameters', async () => {
