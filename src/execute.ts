@@ -7,19 +7,49 @@ import { API_BASE_URL } from './config.js';
 import { log } from './logger.js';
 
 /**
+ * How a tool call obtains the credential for the API. It is asked only once the
+ * arguments are valid, and told when the API rejected the credential.
+ */
+export interface UpstreamAuth {
+    getToken(): Promise<string>;
+    invalidate(): void;
+}
+
+const HTTP_UNAUTHORIZED = 401;
+
+// Headers a tool argument must never set: tools.ts is generated from the OpenAPI
+// document, so a header parameter could otherwise override credentials or routing.
+const FORBIDDEN_HEADERS = new Set([
+    'authorization',
+    'proxy-authorization',
+    'cookie',
+    'host',
+    'content-length',
+    'transfer-encoding',
+    'connection',
+    'forwarded',
+]);
+const FORBIDDEN_HEADER_PREFIXES = ['x-forwarded-'];
+
+function isForbiddenHeader(name: string): boolean {
+    const header = name.toLowerCase();
+    return FORBIDDEN_HEADERS.has(header) || FORBIDDEN_HEADER_PREFIXES.some(prefix => header.startsWith(prefix));
+}
+
+/**
  * Executes an API tool with the provided arguments
  *
  * @param toolName Name of the tool to execute
  * @param definition Tool definition
  * @param toolArgs Arguments provided by the user
- * @param bearerToken Optional bearer token for JWT authentication
+ * @param upstreamAuth Credentials for the API; without it the request is unauthenticated
  * @returns Call tool result
  */
 export async function executeApiTool(
     toolName: string,
     definition: McpToolDefinition,
     toolArgs: JsonObject,
-    bearerToken?: string
+    upstreamAuth?: UpstreamAuth
 ): Promise<CallToolResult> {
   try {
     // Validate arguments against the input schema
@@ -55,7 +85,11 @@ export async function executeApiTool(
                 queryParams[param.name] = value;
             }
             else if (param.in === 'header') {
-                headers[param.name.toLowerCase()] = String(value);
+                if (isForbiddenHeader(param.name)) {
+                    log.warn(`Ignoring tool argument for protected header '${param.name}' in tool '${toolName}'`);
+                } else {
+                    headers[param.name.toLowerCase()] = String(value);
+                }
             }
         }
     });
@@ -75,12 +109,6 @@ export async function executeApiTool(
     }
 
 
-    // Apply JWT Bearer authentication
-    if (bearerToken) {
-        headers['authorization'] = `Bearer ${bearerToken}`;
-    }
-    
-
     // Prepare the axios request configuration
     const config: AxiosRequestConfig = {
       method: definition.method.toUpperCase(),
@@ -93,8 +121,18 @@ export async function executeApiTool(
 
     log.debug(`Executing tool "${toolName}": ${config.method} ${config.url}`);
     
-    // Execute the request
-    const response = await axios(config);
+    // Execute the request, renewing a rejected credential exactly once
+    let response;
+    try {
+        response = await axios(await authenticated(config, upstreamAuth));
+    } catch (error: unknown) {
+        if (!upstreamAuth || !axios.isAxiosError(error) || error.response?.status !== HTTP_UNAUTHORIZED) {
+            throw error;
+        }
+
+        upstreamAuth.invalidate();
+        response = await axios(await authenticated(config, upstreamAuth));
+    }
 
     // Process and format the response
     let responseText = '';
@@ -157,6 +195,17 @@ export async function executeApiTool(
 
 
 
+
+/**
+ * Returns the request with the API credential, fetched at the last moment.
+ */
+async function authenticated(config: AxiosRequestConfig, upstreamAuth?: UpstreamAuth): Promise<AxiosRequestConfig> {
+    if (!upstreamAuth) {
+        return config;
+    }
+
+    return { ...config, headers: { ...config.headers, authorization: `Bearer ${await upstreamAuth.getToken()}` } };
+}
 
 /**
  * Formats API errors for better readability

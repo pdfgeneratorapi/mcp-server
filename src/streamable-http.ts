@@ -22,6 +22,7 @@ import { buildProtectedResourceMetadata } from './auth/protectedResourceMetadata
 import { requireBearerToken } from './auth/middleware.js';
 import { createRemoteKeySetProvider } from './auth/asMetadata.js';
 import { createTokenVerifier, type TokenVerifier } from './auth/verifier.js';
+import { createMintedCredentials, type UpstreamCredentials } from './credentials/upstream.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
@@ -38,13 +39,11 @@ class MCPStreamableHttpServer {
   // Store active transports and servers by session ID
   transports: {[sessionId: string]: StreamableHTTPServerTransport} = {};
   servers: {[sessionId: string]: Server} = {};
-  // Store authorization tokens per session
-  sessionTokens: {[sessionId: string]: string} = {};
   // Track last activity per session for TTL expiration
   private lastActivity: {[sessionId: string]: number} = {};
   private cleanupTimer: ReturnType<typeof setInterval>;
 
-  constructor() {
+  constructor(private readonly credentials: UpstreamCredentials) {
     this.cleanupTimer = setInterval(() => this.cleanupStaleSessions(), SESSION_CLEANUP_INTERVAL_MS);
     this.cleanupTimer.unref();
   }
@@ -71,7 +70,6 @@ class MCPStreamableHttpServer {
     } catch { /* ignore close errors */ }
     delete this.transports[sessionId];
     delete this.servers[sessionId];
-    delete this.sessionTokens[sessionId];
     delete this.lastActivity[sessionId];
   }
   
@@ -90,7 +88,6 @@ class MCPStreamableHttpServer {
    */
   async handlePostRequest(c: any) {
     const sessionId = c.req.header(SESSION_ID_HEADER_NAME);
-    const authHeader = c.req.header('Authorization');
     log.debug(`POST request received ${sessionId ? 'with session ID: ' + sessionId : 'without session ID'}`);
 
     try {
@@ -131,15 +128,9 @@ class MCPStreamableHttpServer {
           log.error('StreamableHTTP transport error:', err);
         };
 
-        // Extract Bearer token from Authorization header
-        let bearerToken: string | undefined;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          bearerToken = authHeader.substring(7);
-          log.debug('Bearer token provided via Authorization header');
-        }
-
-        // Create a new MCP server instance for this session
-        const newServer = createMcpServer(bearerToken);
+        // Create a new MCP server instance for this session; each tool call resolves its
+        // API credential from the verified token of that request, never from the header
+        const newServer = createMcpServer(this.credentials);
 
         // Connect the transport to the new MCP server
         await newServer.connect(transport);
@@ -154,9 +145,6 @@ class MCPStreamableHttpServer {
           this.transports[newSessionId] = transport;
           this.servers[newSessionId] = newServer;
           this.lastActivity[newSessionId] = Date.now();
-          if (bearerToken) {
-            this.sessionTokens[newSessionId] = bearerToken;
-          }
 
           // Set up clean-up for when the transport is closed
           transport.onclose = () => {
@@ -225,7 +213,11 @@ class MCPStreamableHttpServer {
  * @param authConfig OAuth configuration (read from the environment by default)
  * @returns The Hono app instance
  */
-export function createHttpApp(authConfig: AuthConfig = loadAuthConfig(), verifier: TokenVerifier = remoteTokenVerifier(authConfig)) {
+export function createHttpApp(
+  authConfig: AuthConfig = loadAuthConfig(),
+  verifier: TokenVerifier = remoteTokenVerifier(authConfig),
+  credentials: UpstreamCredentials = mintedCredentials(authConfig),
+) {
   const app = new Hono();
   const protectedResourceMetadata = buildProtectedResourceMetadata(authConfig);
 
@@ -239,7 +231,7 @@ export function createHttpApp(authConfig: AuthConfig = loadAuthConfig(), verifie
   }));
 
   // Create MCP handler (creates new server instances per session)
-  const mcpHandler = new MCPStreamableHttpServer();
+  const mcpHandler = new MCPStreamableHttpServer(credentials);
   
   // Add a simple health check endpoint
   app.get('/health', (c) => {
@@ -315,6 +307,10 @@ export function createHttpApp(authConfig: AuthConfig = loadAuthConfig(), verifie
   return app;
 }
 
+function mintedCredentials(authConfig: AuthConfig): UpstreamCredentials {
+  return createMintedCredentials({ url: authConfig.credentialsUrl, issuer: authConfig.issuer });
+}
+
 function remoteTokenVerifier(authConfig: AuthConfig): TokenVerifier {
   return createTokenVerifier({
     issuer: authConfig.issuer,
@@ -327,15 +323,19 @@ function remoteTokenVerifier(authConfig: AuthConfig): TokenVerifier {
  * Sets up a web server for the MCP server using StreamableHTTP transport
  *
  * @param port The port to listen on (default: 3000)
- * @param options Overrides for the OAuth configuration and token verifier (tests)
+ * @param options Overrides for the OAuth configuration, token verifier and API credentials (tests)
  * @returns The Hono app instance, the HTTP server, and the actual listening port
  */
 export async function setupStreamableHttpServer(
   port = 3000,
-  options: { authConfig?: AuthConfig; verifier?: TokenVerifier } = {},
+  options: { authConfig?: AuthConfig; verifier?: TokenVerifier; credentials?: UpstreamCredentials } = {},
 ) {
   const authConfig = options.authConfig ?? loadAuthConfig();
-  const app = createHttpApp(authConfig, options.verifier ?? remoteTokenVerifier(authConfig));
+  const app = createHttpApp(
+    authConfig,
+    options.verifier ?? remoteTokenVerifier(authConfig),
+    options.credentials ?? mintedCredentials(authConfig),
+  );
 
   // Start the server
   const server = serve({
