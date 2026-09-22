@@ -4,6 +4,7 @@
 
 import { createMcpServer, SERVER_NAME, SERVER_VERSION } from '../index.js';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { createStaticCredentials } from '../credentials/upstream.js';
 
 describe('createMcpServer', () => {
   describe('server creation', () => {
@@ -18,23 +19,13 @@ describe('createMcpServer', () => {
       expect(server1).not.toBe(server2);
     });
 
-    it('should accept optional bearer token', () => {
-      const server = createMcpServer('test-token-123');
+    it('should accept upstream credentials', () => {
+      const server = createMcpServer(createStaticCredentials('test-token-123'));
       expect(server).toBeInstanceOf(Server);
     });
 
-    it('should work without bearer token', () => {
+    it('should work without upstream credentials', () => {
       const server = createMcpServer();
-      expect(server).toBeInstanceOf(Server);
-    });
-
-    it('should work with undefined bearer token', () => {
-      const server = createMcpServer(undefined);
-      expect(server).toBeInstanceOf(Server);
-    });
-
-    it('should work with empty string bearer token', () => {
-      const server = createMcpServer('');
       expect(server).toBeInstanceOf(Server);
     });
   });

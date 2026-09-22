@@ -73,6 +73,23 @@ describe('loadAuthConfig', () => {
     expect(loadAuthConfig({ MCP_RESOURCE_URL: RESOURCE, OAUTH_ISSUER: ISSUER, OAUTH_JWKS_URI: jwksUri }).jwksUri).toBe(jwksUri);
   });
 
+  it('reaches the api credential endpoint in-cluster unless MCP_CREDENTIALS_URL overrides it', () => {
+    const credentialsUrl = 'http://pdf-api-main-tenant/internal/mcp/credentials';
+
+    expect(config.credentialsUrl).toBe('http://pdf-api-main/internal/mcp/credentials');
+    expect(loadAuthConfig({ MCP_RESOURCE_URL: RESOURCE, OAUTH_ISSUER: ISSUER, MCP_CREDENTIALS_URL: credentialsUrl }).credentialsUrl)
+      .toBe(credentialsUrl);
+  });
+
+  it.each([
+    ['a relative value', '/internal/mcp/credentials'],
+    ['another scheme', 'ftp://pdf-api-main/internal/mcp/credentials'],
+    ['credentials', 'http://user:pass@pdf-api-main/internal/mcp/credentials'],
+  ])('refuses to start with a credentials URL carrying %s', (_label, credentialsUrl) => {
+    expect(() => loadAuthConfig({ MCP_RESOURCE_URL: RESOURCE, OAUTH_ISSUER: ISSUER, MCP_CREDENTIALS_URL: credentialsUrl }))
+      .toThrow(/MCP_CREDENTIALS_URL/);
+  });
+
   it('refuses to start with a JWKS override over plain http to a public host', () => {
     expect(() => loadAuthConfig({ MCP_RESOURCE_URL: RESOURCE, OAUTH_ISSUER: ISSUER, OAUTH_JWKS_URI: 'http://keys.example.test/jwks.json' }))
       .toThrow(/OAUTH_JWKS_URI/);

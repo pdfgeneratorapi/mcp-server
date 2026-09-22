@@ -12,6 +12,7 @@ jest.unstable_mockModule('axios', () => {
 });
 
 const { createMcpServer } = await import('../server.js');
+const { createStaticCredentials } = await import('../credentials/upstream.js');
 const { toolDefinitionMap } = await import('../tools.js');
 const { SERVER_NAME, SERVER_VERSION } = await import('../config.js');
 const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
@@ -20,7 +21,7 @@ const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.j
 describe('createMcpServer', () => {
   describe('listTools handler', () => {
     it('should return all tools with simplified schemas', async () => {
-      const server = createMcpServer('test-token');
+      const server = createMcpServer(createStaticCredentials('test-token'));
 
       // Access the internal handler via the server's request handling
       // We test through the public interface by checking tool count
@@ -39,7 +40,7 @@ describe('createMcpServer', () => {
     });
 
     it('should return tools via MCP protocol', async () => {
-      const server = createMcpServer('test-token');
+      const server = createMcpServer(createStaticCredentials('test-token'));
       const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
       const client = new Client({ name: 'test-client', version: '1.0.0' });
@@ -70,7 +71,7 @@ describe('createMcpServer', () => {
         data: { success: true },
       });
 
-      const server = createMcpServer('test-token');
+      const server = createMcpServer(createStaticCredentials('test-token'));
       const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
       const client = new Client({ name: 'test-client', version: '1.0.0' });
@@ -92,7 +93,7 @@ describe('createMcpServer', () => {
     });
 
     it('should return error for unknown tool', async () => {
-      const server = createMcpServer('test-token');
+      const server = createMcpServer(createStaticCredentials('test-token'));
       const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
 
       const client = new Client({ name: 'test-client', version: '1.0.0' });
@@ -124,8 +125,8 @@ describe('createMcpServer', () => {
       expect(s1).not.toBe(s2);
     });
 
-    it('should accept bearer token parameter', () => {
-      const server = createMcpServer('my-token');
+    it('should accept upstream credentials', () => {
+      const server = createMcpServer(createStaticCredentials('my-token'));
       expect(server).toBeDefined();
     });
 

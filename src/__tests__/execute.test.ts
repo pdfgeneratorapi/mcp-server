@@ -27,6 +27,23 @@ function makeTool(overrides: Partial<McpToolDefinition> = {}): McpToolDefinition
   };
 }
 
+function upstreamAuth(...tokens: string[]) {
+  let call = 0;
+
+  return {
+    getToken: jest.fn(async () => tokens[Math.min(call++, tokens.length - 1)]),
+    invalidate: jest.fn(),
+  };
+}
+
+function axiosError(status: number) {
+  return Object.assign(new Error(`Request failed with status code ${status}`), {
+    isAxiosError: true,
+    response: { status, statusText: '', data: {}, headers: {} },
+    config: {},
+  });
+}
+
 beforeEach(() => {
   mockAxios.mockReset();
 });
@@ -53,20 +70,20 @@ describe('executeApiTool', () => {
     });
   });
 
-  it('should set Authorization header when bearer token provided', async () => {
+  it('should authenticate with the upstream credential', async () => {
     mockAxios.mockResolvedValue({
       status: 200,
       headers: { 'content-type': 'application/json' },
       data: {},
     });
 
-    await executeApiTool('testTool', makeTool(), {}, 'my-jwt-token');
+    await executeApiTool('testTool', makeTool(), {}, upstreamAuth('upstream-token'));
 
     const config = mockAxios.mock.calls[0][0] as any;
-    expect(config.headers.authorization).toBe('Bearer my-jwt-token');
+    expect(config.headers.authorization).toBe('Bearer upstream-token');
   });
 
-  it('should not set Authorization header when no token', async () => {
+  it('should not set Authorization header without upstream credentials', async () => {
     mockAxios.mockResolvedValue({
       status: 200,
       headers: { 'content-type': 'application/json' },
@@ -77,6 +94,96 @@ describe('executeApiTool', () => {
 
     const config = mockAxios.mock.calls[0][0] as any;
     expect(config.headers.authorization).toBeUndefined();
+  });
+
+  it('should not fetch a credential for arguments that fail validation', async () => {
+    const auth = upstreamAuth('upstream-token');
+    const tool = makeTool({
+      inputSchema: { type: 'object', properties: { templateId: { type: 'integer' } }, required: ['templateId'] },
+    });
+
+    const result = await executeApiTool('testTool', tool, {}, auth);
+
+    expect(result.isError).toBe(true);
+    expect(auth.getToken).not.toHaveBeenCalled();
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('should retry once with a fresh credential after a 401', async () => {
+    const auth = upstreamAuth('stale-token', 'fresh-token');
+    mockAxios
+      .mockRejectedValueOnce(axiosError(401))
+      .mockResolvedValueOnce({ status: 200, headers: { 'content-type': 'application/json' }, data: { ok: true } });
+
+    const result = await executeApiTool('testTool', makeTool(), {}, auth);
+
+    expect(result.isError).toBeFalsy();
+    expect(auth.invalidate).toHaveBeenCalledTimes(1);
+    expect(mockAxios).toHaveBeenCalledTimes(2);
+    expect((mockAxios.mock.calls[1][0] as any).headers.authorization).toBe('Bearer fresh-token');
+  });
+
+  it('should give up after a second 401', async () => {
+    const auth = upstreamAuth('stale-token', 'still-stale-token');
+    mockAxios.mockRejectedValue(axiosError(401));
+
+    const result = await executeApiTool('testTool', makeTool(), {}, auth);
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).toHaveBeenCalledTimes(2);
+    expect(auth.invalidate).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not retry other errors', async () => {
+    const auth = upstreamAuth('upstream-token');
+    mockAxios.mockRejectedValue(axiosError(403));
+
+    await executeApiTool('testTool', makeTool(), {}, auth);
+
+    expect(mockAxios).toHaveBeenCalledTimes(1);
+    expect(auth.invalidate).not.toHaveBeenCalled();
+  });
+
+  it('should report a credential that cannot be obtained as a tool error', async () => {
+    const auth = {
+      getToken: jest.fn(async () => { throw new Error('The user belongs to several organizations.'); }),
+      invalidate: jest.fn(),
+    };
+
+    const result = await executeApiTool('testTool', makeTool(), {}, auth);
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as any).text).toContain('The user belongs to several organizations.');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it.each(['Authorization', 'Proxy-Authorization', 'Cookie', 'Host', 'Content-Length', 'Transfer-Encoding', 'Connection', 'X-Forwarded-For', 'Forwarded'])(
+    'should never let a tool argument set the %s header',
+    async (header) => {
+      mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: {} });
+      const tool = makeTool({
+        inputSchema: { type: 'object', properties: { [header]: { type: 'string' } } },
+        executionParameters: [{ name: header, in: 'header' }],
+      });
+
+      await executeApiTool('testTool', tool, { [header]: 'injected' }, upstreamAuth('upstream-token'));
+
+      const headers = (mockAxios.mock.calls[0][0] as any).headers as Record<string, string>;
+      expect(Object.values(headers)).not.toContain('injected');
+      expect(headers.authorization).toBe('Bearer upstream-token');
+    },
+  );
+
+  it('should still pass other header parameters', async () => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: {} });
+    const tool = makeTool({
+      inputSchema: { type: 'object', properties: { 'X-Request-Id': { type: 'string' } } },
+      executionParameters: [{ name: 'X-Request-Id', in: 'header' }],
+    });
+
+    await executeApiTool('testTool', tool, { 'X-Request-Id': 'abc' });
+
+    expect((mockAxios.mock.calls[0][0] as any).headers['x-request-id']).toBe('abc');
   });
 
   it('should replace path parameters', async () => {

@@ -13,6 +13,7 @@ import { log } from './logger.js';
 import { simplifySchemaForOpenAI } from './schema.js';
 import { toolDefinitionMap } from './tools.js';
 import { executeApiTool } from './execute.js';
+import type { UpstreamCredentials } from './credentials/upstream.js';
 
 /**
  * Tool annotations — hints for MCP clients about tool behavior
@@ -101,9 +102,9 @@ const prompts = [
 /**
  * Factory function to create new MCP Server instances
  * Each connection needs its own server instance
- * @param bearerToken Optional bearer token for authentication (required for API calls)
+ * @param credentials Credentials for the API, resolved per call from the verified access token
  */
-export function createMcpServer(bearerToken?: string): Server {
+export function createMcpServer(credentials?: UpstreamCredentials): Server {
     const server = new Server(
         {
             name: SERVER_NAME,
@@ -129,14 +130,18 @@ export function createMcpServer(bearerToken?: string): Server {
         return { tools: toolsForClient };
     });
 
-    server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest): Promise<CallToolResult> => {
+    server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest, extra): Promise<CallToolResult> => {
         const { name: toolName, arguments: toolArgs } = request.params;
         const toolDefinition = toolDefinitionMap.get(toolName);
         if (!toolDefinition) {
             log.warn(`Unknown tool requested: ${toolName}`);
             return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }], isError: true };
         }
-        return await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, bearerToken);
+        const upstreamAuth = credentials && {
+            getToken: () => credentials.get(extra.authInfo),
+            invalidate: () => credentials.invalidate(extra.authInfo),
+        };
+        return await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, upstreamAuth);
     });
 
     server.setRequestHandler(ListPromptsRequestSchema, async () => {
