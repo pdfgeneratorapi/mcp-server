@@ -2,7 +2,7 @@
  * Sessions of the HTTP transport, and who owns them.
  */
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import type { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
 /** Who a session belongs to. Never the token itself, so a refreshed token keeps working. */
@@ -13,7 +13,7 @@ export interface SessionOwner {
 }
 
 export interface Session {
-  transport: StreamableHTTPServerTransport;
+  transport: WebStandardStreamableHTTPServerTransport;
   server: Server;
   owner: SessionOwner;
   lastActivity: number;
