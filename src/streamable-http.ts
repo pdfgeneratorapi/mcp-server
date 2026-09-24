@@ -7,7 +7,6 @@ import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { v4 as uuid } from 'uuid';
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { InitializeRequestSchema, JSONRPCError } from "@modelcontextprotocol/sdk/types.js";
 import { toReqRes, toFetchResponse } from 'fetch-to-node';
 
@@ -23,12 +22,15 @@ import { requireBearerToken } from './auth/middleware.js';
 import { createRemoteKeySetProvider } from './auth/asMetadata.js';
 import { createTokenVerifier, type TokenVerifier } from './auth/verifier.js';
 import { createMintedCredentials, type UpstreamCredentials } from './credentials/upstream.js';
+import { createInMemorySessionStore, ownedBy, ownerOf, type SessionStore } from './sessions/store.js';
+import { guardRequests, loadTransportLimits } from './transport/guards.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
 const JSON_RPC = "2.0";
 const SESSION_TTL_MS = parseInt(process.env.SESSION_TTL_MINUTES || '30', 10) * 60 * 1000;
 const SESSION_CLEANUP_INTERVAL_MS = 60 * 1000; // Check every minute
+const SESSION_RETRY_AFTER_SECONDS = '60';
 const WELL_KNOWN_PROTECTED_RESOURCE_PATH = '/.well-known/oauth-protected-resource';
 const METADATA_CACHE_CONTROL = 'public, max-age=3600';
 
@@ -36,14 +38,14 @@ const METADATA_CACHE_CONTROL = 'public, max-age=3600';
  * StreamableHTTP MCP Server handler
  */
 class MCPStreamableHttpServer {
-  // Store active transports and servers by session ID
-  transports: {[sessionId: string]: StreamableHTTPServerTransport} = {};
-  servers: {[sessionId: string]: Server} = {};
-  // Track last activity per session for TTL expiration
-  private lastActivity: {[sessionId: string]: number} = {};
   private cleanupTimer: ReturnType<typeof setInterval>;
 
-  constructor(private readonly credentials: UpstreamCredentials) {
+  constructor(
+    private readonly credentials: UpstreamCredentials,
+    private readonly issuer: string,
+    private readonly maxSessions: number,
+    private readonly sessions: SessionStore = createInMemorySessionStore(),
+  ) {
     this.cleanupTimer = setInterval(() => this.cleanupStaleSessions(), SESSION_CLEANUP_INTERVAL_MS);
     this.cleanupTimer.unref();
   }
@@ -52,12 +54,9 @@ class MCPStreamableHttpServer {
    * Remove sessions that have been idle longer than SESSION_TTL_MS
    */
   private cleanupStaleSessions() {
-    const now = Date.now();
-    for (const sessionId of Object.keys(this.lastActivity)) {
-      if (now - this.lastActivity[sessionId] > SESSION_TTL_MS) {
-        log.debug(`Session expired (idle > ${SESSION_TTL_MS / 60000}m): ${sessionId}`);
-        this.destroySession(sessionId);
-      }
+    for (const sessionId of this.sessions.expired(SESSION_TTL_MS, Date.now())) {
+      log.debug(`Session expired (idle > ${SESSION_TTL_MS / 60000}m): ${sessionId}`);
+      this.destroySession(sessionId);
     }
   }
 
@@ -65,12 +64,50 @@ class MCPStreamableHttpServer {
    * Clean up all resources for a session
    */
   private destroySession(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+
+    if (!session) {
+      return;
+    }
+
+    // Forget it first: closing the transport calls back into onclose.
+    this.sessions.delete(sessionId);
+
     try {
-      this.transports[sessionId]?.close();
+      session.transport.close();
     } catch { /* ignore close errors */ }
-    delete this.transports[sessionId];
-    delete this.servers[sessionId];
-    delete this.lastActivity[sessionId];
+  }
+
+  /**
+   * The session of this request, or null when it belongs to nobody the caller is.
+   * An unknown and a foreign session answer alike, so session ids cannot be probed.
+   */
+  private ownSession(c: any, sessionId: string) {
+    const owner = ownerOf(this.issuer, c.get('authInfo'));
+    const session = this.sessions.get(sessionId);
+
+    if (!owner || !session || !ownedBy(session, owner)) {
+      log.warn(`Refused session "${sessionId}" for another identity`);
+      return null;
+    }
+
+    return session;
+  }
+
+  /**
+   * Handle DELETE requests (spec session termination)
+   */
+  async handleDeleteRequest(c: any) {
+    const sessionId = c.req.header(SESSION_ID_HEADER_NAME);
+
+    if (!sessionId || !this.ownSession(c, sessionId)) {
+      return c.json(this.createErrorResponse('Not Found: unknown session.'), 404);
+    }
+
+    this.destroySession(sessionId);
+    log.debug(`Session terminated: ${sessionId}`);
+
+    return c.body(null, 204);
   }
   
   /**
@@ -98,10 +135,16 @@ class MCPStreamableHttpServer {
       const { req, res } = toReqRes(c.req.raw);
       (req as IncomingMessage & { auth?: AuthInfo }).auth = c.get('authInfo');
       
-      // Reuse existing transport if we have a session ID
-      if (sessionId && this.transports[sessionId]) {
-        this.lastActivity[sessionId] = Date.now();
-        const transport = this.transports[sessionId];
+      // Reuse the session only for the identity that opened it
+      if (sessionId) {
+        const session = this.ownSession(c, sessionId);
+
+        if (!session) {
+          return c.json(this.createErrorResponse('Not Found: unknown session.'), 404);
+        }
+
+        this.sessions.touch(sessionId);
+        const transport = session.transport;
         
         // Handle the request with the transport
         await transport.handleRequest(req, res, body);
@@ -117,6 +160,15 @@ class MCPStreamableHttpServer {
       
       // Create new transport for initialize requests
       if (!sessionId && this.isInitializeRequest(body)) {
+        if (this.sessions.size() >= this.maxSessions) {
+          log.warn(`Refused a new session: at capacity (${this.maxSessions})`);
+          return c.json(
+            this.createErrorResponse('Service Unavailable: session capacity reached.'),
+            503,
+            { 'Retry-After': SESSION_RETRY_AFTER_SECONDS },
+          );
+        }
+
         log.debug("Creating new StreamableHTTP transport for initialize request");
 
         const transport = new StreamableHTTPServerTransport({
@@ -140,11 +192,16 @@ class MCPStreamableHttpServer {
 
         // Store the transport and server if we have a session ID
         const newSessionId = transport.sessionId;
+        const owner = ownerOf(this.issuer, c.get('authInfo'));
+
+        if (!owner) {
+          log.error('Refusing a session: the verified token names no subject or client');
+          return c.json(this.createErrorResponse('Unauthorized: the access token names no subject.'), 401);
+        }
+
         if (newSessionId) {
           log.debug(`New session established: ${newSessionId}`);
-          this.transports[newSessionId] = transport;
-          this.servers[newSessionId] = newServer;
-          this.lastActivity[newSessionId] = Date.now();
+          this.sessions.add(newSessionId, { transport, server: newServer, owner, lastActivity: Date.now() });
 
           // Set up clean-up for when the transport is closed
           transport.onclose = () => {
@@ -231,7 +288,8 @@ export function createHttpApp(
   }));
 
   // Create MCP handler (creates new server instances per session)
-  const mcpHandler = new MCPStreamableHttpServer(credentials);
+  const limits = loadTransportLimits(authConfig.resource);
+  const mcpHandler = new MCPStreamableHttpServer(credentials, authConfig.issuer, limits.maxSessions);
   
   // Add a simple health check endpoint
   app.get('/health', (c) => {
@@ -247,9 +305,11 @@ export function createHttpApp(
   app.all('/.well-known/*', (c) => c.json({ error: 'not_found' }, 404));
 
   // Main MCP endpoint supporting both GET and POST
+  app.use('/mcp', guardRequests(limits));
   app.use('/mcp', requireBearerToken(authConfig, verifier));
   app.get("/mcp", (c) => mcpHandler.handleGetRequest(c));
   app.post("/mcp", (c) => mcpHandler.handlePostRequest(c));
+  app.delete("/mcp", (c) => mcpHandler.handleDeleteRequest(c));
   
   // Static files for the web client (if any)
   app.get('/*', async (c) => {
