@@ -6,16 +6,13 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { v4 as uuid } from 'uuid';
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { InitializeRequestSchema, JSONRPCError } from "@modelcontextprotocol/sdk/types.js";
-import { toReqRes, toFetchResponse } from 'fetch-to-node';
 
 // Import server configuration constants and factory
 import { SERVER_NAME, SERVER_VERSION } from './config.js';
 import { createMcpServer } from './server.js';
 import { log } from './logger.js';
-import type { IncomingMessage } from 'node:http';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { loadAuthConfig, type AuthConfig } from './auth/config.js';
 import { buildProtectedResourceMetadata } from './auth/protectedResourceMetadata.js';
 import { requireBearerToken } from './auth/middleware.js';
@@ -125,16 +122,10 @@ class MCPStreamableHttpServer {
    */
   async handlePostRequest(c: any) {
     const sessionId = c.req.header(SESSION_ID_HEADER_NAME);
+    const authInfo = c.get('authInfo');
     log.debug(`POST request received ${sessionId ? 'with session ID: ' + sessionId : 'without session ID'}`);
 
     try {
-      const body = await c.req.json();
-      
-      // Convert Fetch Request to Node.js req/res, carrying the verified token to the transport,
-      // which hands it to request handlers as extra.authInfo
-      const { req, res } = toReqRes(c.req.raw);
-      (req as IncomingMessage & { auth?: AuthInfo }).auth = c.get('authInfo');
-      
       // Reuse the session only for the identity that opened it
       if (sessionId) {
         const session = this.ownSession(c, sessionId);
@@ -144,22 +135,22 @@ class MCPStreamableHttpServer {
         }
 
         this.sessions.touch(sessionId);
-        const transport = session.transport;
-        
-        // Handle the request with the transport
-        await transport.handleRequest(req, res, body);
-        
-        // Cleanup when the response ends
-        res.on('close', () => {
-          log.debug(`Request closed for session ${sessionId}`);
-        });
-        
-        // Convert Node.js response back to Fetch Response
-        return toFetchResponse(res);
+
+        return await session.transport.handleRequest(c.req.raw, { authInfo });
       }
-      
+
+      // Read the body from a copy: the transport needs the request untouched
+      const body = await c.req.raw.clone().json();
+
       // Create new transport for initialize requests
-      if (!sessionId && this.isInitializeRequest(body)) {
+      if (this.isInitializeRequest(body)) {
+        const owner = ownerOf(this.issuer, authInfo);
+
+        if (!owner) {
+          log.error('Refusing a session: the verified token names no subject or client');
+          return c.json(this.createErrorResponse('Unauthorized: the access token names no subject.'), 401);
+        }
+
         if (this.sessions.size() >= this.maxSessions) {
           log.warn(`Refused a new session: at capacity (${this.maxSessions})`);
           return c.json(
@@ -171,54 +162,34 @@ class MCPStreamableHttpServer {
 
         log.debug("Creating new StreamableHTTP transport for initialize request");
 
-        const transport = new StreamableHTTPServerTransport({
+        const transport = new WebStandardStreamableHTTPServerTransport({
           sessionIdGenerator: () => uuid(),
+          onsessionclosed: (closedSessionId: string) => {
+            log.debug(`Session closed: ${closedSessionId}`);
+            this.destroySession(closedSessionId);
+          },
         });
 
-        // Add error handler for debug purposes
         transport.onerror = (err) => {
           log.error('StreamableHTTP transport error:', err);
         };
 
-        // Create a new MCP server instance for this session; each tool call resolves its
-        // API credential from the verified token of that request, never from the header
+        // Each tool call resolves its API credential from the verified token of that
+        // request, never from the header
         const newServer = createMcpServer(this.credentials);
-
-        // Connect the transport to the new MCP server
         await newServer.connect(transport);
 
-        // Handle the request with the transport
-        await transport.handleRequest(req, res, body);
-
-        // Store the transport and server if we have a session ID
+        const response = await transport.handleRequest(c.req.raw, { authInfo });
         const newSessionId = transport.sessionId;
-        const owner = ownerOf(this.issuer, c.get('authInfo'));
-
-        if (!owner) {
-          log.error('Refusing a session: the verified token names no subject or client');
-          return c.json(this.createErrorResponse('Unauthorized: the access token names no subject.'), 401);
-        }
 
         if (newSessionId) {
           log.debug(`New session established: ${newSessionId}`);
           this.sessions.add(newSessionId, { transport, server: newServer, owner, lastActivity: Date.now() });
-
-          // Set up clean-up for when the transport is closed
-          transport.onclose = () => {
-            log.debug(`Session closed: ${newSessionId}`);
-            this.destroySession(newSessionId);
-          };
         }
 
-        // Cleanup when the response ends
-        res.on('close', () => {
-          log.debug(`Request closed for new session`);
-        });
-
-        // Convert Node.js response back to Fetch Response
-        return toFetchResponse(res);
+        return response;
       }
-      
+
       // Invalid request (no session ID and not initialize)
       return c.json(
         this.createErrorResponse("Bad Request: invalid session ID or method."),
