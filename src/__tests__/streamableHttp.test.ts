@@ -16,7 +16,7 @@ const { SERVER_NAME, SERVER_VERSION } = await import('../config.js');
 // Every request to /mcp must carry a bearer token
 const AUTHORIZATION = { 'Authorization': 'Bearer test-token' };
 const acceptingVerifier = {
-  verify: async (token: string) => ({ token, clientId: 'test-client', scopes: [], extra: {} }),
+  verify: async (token: string) => ({ token, clientId: 'test-client', scopes: [], extra: { sub: 'test-user' } }),
 };
 
 // Servers to close after all tests
@@ -73,7 +73,8 @@ describe('setupStreamableHttpServer', () => {
       expect(body.error.message).toContain('Bad Request');
     });
 
-    it('should return 400 for POST /mcp with invalid session ID', async () => {
+    /** An unknown session and a session of someone else answer alike, so ids cannot be probed. */
+    it('should return 404 for POST /mcp with invalid session ID', async () => {
       const res = await fetch(`${baseUrl}/mcp`, {
         method: 'POST',
         headers: {
@@ -84,7 +85,7 @@ describe('setupStreamableHttpServer', () => {
         body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
       });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(404);
     });
   });
 
