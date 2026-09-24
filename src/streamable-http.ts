@@ -21,6 +21,9 @@ import { createTokenVerifier, type TokenVerifier } from './auth/verifier.js';
 import { createMintedCredentials, type UpstreamCredentials } from './credentials/upstream.js';
 import { createInMemorySessionStore, ownedBy, ownerOf, type SessionStore } from './sessions/store.js';
 import { guardRequests, loadTransportLimits } from './transport/guards.js';
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import { loadScopeEnforcement, mayCallTool } from './auth/scopes.js';
+import { challenges } from './auth/challenges.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
@@ -39,6 +42,7 @@ class MCPStreamableHttpServer {
 
   constructor(
     private readonly credentials: UpstreamCredentials,
+    private readonly resourceMetadataUrl: string,
     private readonly issuer: string,
     private readonly maxSessions: number,
     private readonly sessions: SessionStore = createInMemorySessionStore(),
@@ -126,6 +130,16 @@ class MCPStreamableHttpServer {
     log.debug(`POST request received ${sessionId ? 'with session ID: ' + sessionId : 'without session ID'}`);
 
     try {
+      // Read the body from a copy: the transport needs the request untouched
+      const body = await c.req.raw.clone().json();
+      const refusal = this.scopeRefusal(body, authInfo);
+
+      // A single call can be answered with the step-up challenge a client can act on;
+      // a batch cannot, so its elements are refused one by one by the tool handler.
+      if (refusal) {
+        return c.json(refusal.body, refusal.status, { 'WWW-Authenticate': refusal.wwwAuthenticate });
+      }
+
       // Reuse the session only for the identity that opened it
       if (sessionId) {
         const session = this.ownSession(c, sessionId);
@@ -138,9 +152,6 @@ class MCPStreamableHttpServer {
 
         return await session.transport.handleRequest(c.req.raw, { authInfo });
       }
-
-      // Read the body from a copy: the transport needs the request untouched
-      const body = await c.req.raw.clone().json();
 
       // Create new transport for initialize requests
       if (this.isInitializeRequest(body)) {
@@ -205,6 +216,31 @@ class MCPStreamableHttpServer {
   }
   
   /**
+   * The step-up challenge for a single tools/call the grant does not cover.
+   */
+  private scopeRefusal(body: unknown, authInfo: AuthInfo | undefined) {
+    if (loadScopeEnforcement() !== 'enforce' || Array.isArray(body)) {
+      return null;
+    }
+
+    const request = body as { method?: string; params?: { name?: string } };
+
+    if (request?.method !== 'tools/call' || typeof request.params?.name !== 'string') {
+      return null;
+    }
+
+    const decision = mayCallTool(request.params.name, authInfo?.scopes ?? []);
+
+    if (decision.allowed || decision.required === null) {
+      return null;
+    }
+
+    log.warn(`Refused "${request.params.name}": the token does not grant "${decision.required}"`);
+
+    return challenges.insufficientScope(this.resourceMetadataUrl, [decision.required]);
+  }
+
+  /**
    * Create a JSON-RPC error response
    */
   private createErrorResponse(message: string): JSONRPCError {
@@ -260,7 +296,7 @@ export function createHttpApp(
 
   // Create MCP handler (creates new server instances per session)
   const limits = loadTransportLimits(authConfig.resource);
-  const mcpHandler = new MCPStreamableHttpServer(credentials, authConfig.issuer, limits.maxSessions);
+  const mcpHandler = new MCPStreamableHttpServer(credentials, authConfig.resourceMetadataUrl, authConfig.issuer, limits.maxSessions);
   
   // Add a simple health check endpoint
   app.get('/health', (c) => {
