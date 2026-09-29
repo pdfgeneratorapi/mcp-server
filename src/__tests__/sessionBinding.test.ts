@@ -13,16 +13,19 @@ const { loadAuthConfig } = await import('../auth/config.js');
 const RESOURCE = 'https://mcp.example.test/mcp';
 const config = loadAuthConfig({ MCP_RESOURCE_URL: RESOURCE, OAUTH_ISSUER: 'https://auth.example.test' });
 
-/** A token reads "<subject>.<client>.<issued>", so a test can act as another user, client or refreshed token. */
+/**
+ * A token reads "<subject>.<client>.<issued>[.<organization>]", so a test can act as another user,
+ * client, organization or refreshed token.
+ */
 const verifier = {
   verify: async (token: string): Promise<AuthInfo> => {
-    const [sub, clientId] = token.split('.');
+    const [sub, clientId, , organization] = token.split('.');
     return {
       token,
       clientId,
       scopes: [],
       expiresAt: Math.floor(Date.now() / 1000) + 1800,
-      extra: { sub, workspaceId: 1, jti: token },
+      extra: { sub, workspaceId: 1, organizationId: organization ? Number(organization) : undefined, jti: token },
     };
   },
 };
@@ -113,6 +116,27 @@ describe('session identity binding', () => {
   ])('answers 404 for a session belonging to %s', async (_label, token) => {
     const url = await startServer();
     const sessionId = await openSession(url, 'user-a.client-1.first');
+
+    expect((await listTools(url, token, sessionId)).status).toBe(404);
+  });
+
+  it('accepts a refreshed token of the same grant in the same organization', async () => {
+    const url = await startServer();
+    const sessionId = await openSession(url, 'user-a.client-1.first.10');
+
+    expect((await listTools(url, 'user-a.client-1.refreshed.10', sessionId)).status).toBe(200);
+  });
+
+  /**
+   * One master user can connect the same client in two organizations; a session opened in one
+   * must not continue in the other.
+   */
+  it.each([
+    ['the same user and client in another organization', 'user-a.client-1.first.10', 'user-a.client-1.first.20'],
+    ['a grant with an organization, for a session opened without one', 'user-a.client-1.first', 'user-a.client-1.first.10'],
+  ])('answers 404 for %s', async (_label, opener, token) => {
+    const url = await startServer();
+    const sessionId = await openSession(url, opener);
 
     expect((await listTools(url, token, sessionId)).status).toBe(404);
   });

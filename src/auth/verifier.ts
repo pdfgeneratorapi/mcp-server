@@ -7,6 +7,7 @@ import { log } from '../logger.js';
 import { AuthorizationServerUnavailableError, InvalidTokenError } from './errors.js';
 
 export const WORKSPACE_CLAIM = 'https://pdfgeneratorapi.com/claims/workspace_id';
+export const ORGANIZATION_CLAIM = 'https://pdfgeneratorapi.com/claims/organization_id';
 
 const ALGORITHM = 'RS256';
 
@@ -60,13 +61,19 @@ export function createTokenVerifier(options: TokenVerifierOptions): TokenVerifie
 
       const clientId = payload.client_id;
       const workspaceId = payload[WORKSPACE_CLAIM];
+      const organizationId = payload[ORGANIZATION_CLAIM];
 
       if (typeof clientId !== 'string' || clientId === '') {
         throw rejected('no client_id', header.kid, payload);
       }
 
-      if (typeof workspaceId !== 'number' || !Number.isInteger(workspaceId) || workspaceId <= 0) {
+      if (!isPositiveInteger(workspaceId)) {
         throw rejected('no workspace claim', header.kid, payload);
+      }
+
+      // Grants approved before the organization was recorded carry no claim; one that is present must be valid.
+      if (organizationId !== undefined && !isPositiveInteger(organizationId)) {
+        throw rejected('malformed organization claim', header.kid, payload);
       }
 
       return {
@@ -75,7 +82,7 @@ export function createTokenVerifier(options: TokenVerifierOptions): TokenVerifie
         scopes: scopesOf(payload),
         expiresAt: payload.exp,
         resource: new URL(options.audience),
-        extra: { sub: payload.sub, workspaceId, jti: payload.jti },
+        extra: { sub: payload.sub, workspaceId, organizationId, jti: payload.jti },
       };
     },
   };
@@ -87,6 +94,10 @@ function decode(token: string) {
   } catch {
     throw new InvalidTokenError('not a JWT');
   }
+}
+
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
 function scopesOf(payload: JWTPayload): string[] {

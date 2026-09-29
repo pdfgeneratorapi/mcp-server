@@ -58,6 +58,7 @@ export function createMintedCredentials(options: MintedCredentialsOptions): Upst
       options.issuer,
       authInfo.extra?.sub,
       authInfo.clientId,
+      authInfo.extra?.organizationId ?? null,
       [...authInfo.scopes].sort(),
       authInfo.resource?.href,
     ]);
