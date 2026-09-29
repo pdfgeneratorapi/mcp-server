@@ -21,6 +21,7 @@ import { createTokenVerifier, type TokenVerifier } from './auth/verifier.js';
 import { createMintedCredentials, type UpstreamCredentials } from './credentials/upstream.js';
 import { createInMemorySessionStore, ownedBy, ownerOf, type SessionStore } from './sessions/store.js';
 import { guardRequests, loadTransportLimits } from './transport/guards.js';
+import { identityKey, limitRequests, loadRateLimits, RateLimiter, tooManyRequests } from './transport/rateLimit.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { loadScopeEnforcement, mayCallTool } from './auth/scopes.js';
 import { challenges } from './auth/challenges.js';
@@ -46,6 +47,7 @@ class MCPStreamableHttpServer {
     private readonly issuer: string,
     private readonly maxSessions: number,
     private readonly sessions: SessionStore = createInMemorySessionStore(),
+    private readonly initializeLimiter: RateLimiter = new RateLimiter(0),
   ) {
     this.cleanupTimer = setInterval(() => this.cleanupStaleSessions(), SESSION_CLEANUP_INTERVAL_MS);
     this.cleanupTimer.unref();
@@ -160,6 +162,13 @@ class MCPStreamableHttpServer {
         if (!owner) {
           log.error('Refusing a session: the verified token names no subject or client');
           return c.json(this.createErrorResponse('Unauthorized: the access token names no subject.'), 401);
+        }
+
+        const opened = this.initializeLimiter.take(identityKey(this.issuer, authInfo) ?? '');
+
+        if (!opened.allowed) {
+          log.warn('Refused a new session: the client opens sessions too fast', { subject: owner.subject, client: owner.clientId });
+          return tooManyRequests(c, opened.retryAfterSeconds, 'session limit reached');
         }
 
         if (this.sessions.size() >= this.maxSessions) {
@@ -291,12 +300,20 @@ export function createHttpApp(
   const corsOrigin = process.env.CORS_ORIGIN;
   app.use('*', cors({
     origin: corsOrigin ? corsOrigin.split(',').map(o => o.trim()) : '*',
-    exposeHeaders: ['WWW-Authenticate', 'Mcp-Session-Id'],
+    exposeHeaders: ['WWW-Authenticate', 'Mcp-Session-Id', 'Retry-After'],
   }));
 
   // Create MCP handler (creates new server instances per session)
   const limits = loadTransportLimits(authConfig.resource);
-  const mcpHandler = new MCPStreamableHttpServer(credentials, authConfig.resourceMetadataUrl, authConfig.issuer, limits.maxSessions);
+  const rateLimits = loadRateLimits();
+  const mcpHandler = new MCPStreamableHttpServer(
+    credentials,
+    authConfig.resourceMetadataUrl,
+    authConfig.issuer,
+    limits.maxSessions,
+    createInMemorySessionStore(),
+    new RateLimiter(rateLimits.initializePerMinute),
+  );
   
   // Add a simple health check endpoint
   app.get('/health', (c) => {
@@ -314,6 +331,7 @@ export function createHttpApp(
   // Main MCP endpoint supporting both GET and POST
   app.use('/mcp', guardRequests(limits));
   app.use('/mcp', requireBearerToken(authConfig, verifier));
+  app.use('/mcp', limitRequests(new RateLimiter(rateLimits.requestsPerMinute), authConfig.issuer));
   app.get("/mcp", (c) => mcpHandler.handleGetRequest(c));
   app.post("/mcp", (c) => mcpHandler.handlePostRequest(c));
   app.delete("/mcp", (c) => mcpHandler.handleDeleteRequest(c));
