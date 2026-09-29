@@ -10,6 +10,8 @@ export interface SessionOwner {
   issuer: string;
   subject: string;
   clientId: string;
+  /** Absent for grants approved before the organization was recorded. */
+  organizationId?: number;
 }
 
 export interface Session {
@@ -35,13 +37,21 @@ export function ownerOf(issuer: string, authInfo: AuthInfo | undefined): Session
     return undefined;
   }
 
-  return { issuer, subject, clientId: authInfo.clientId };
+  const organizationId = authInfo.extra?.organizationId;
+
+  return {
+    issuer,
+    subject,
+    clientId: authInfo.clientId,
+    organizationId: typeof organizationId === 'number' ? organizationId : undefined,
+  };
 }
 
 export function ownedBy(session: Session, owner: SessionOwner): boolean {
   return session.owner.issuer === owner.issuer
     && session.owner.subject === owner.subject
-    && session.owner.clientId === owner.clientId;
+    && session.owner.clientId === owner.clientId
+    && session.owner.organizationId === owner.organizationId;
 }
 
 /**

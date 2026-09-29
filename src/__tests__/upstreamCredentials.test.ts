@@ -9,8 +9,10 @@ const NOW_SECONDS = 1_800_000_000;
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 
-function authInfo(overrides: Partial<AuthInfo> & { jti?: string; sub?: string } = {}): AuthInfo {
-  const { jti = 'token-id', sub = '4821', ...rest } = overrides;
+function authInfo(
+  overrides: Partial<AuthInfo> & { jti?: string; sub?: string; organizationId?: number } = {},
+): AuthInfo {
+  const { jti = 'token-id', sub = '4821', organizationId, ...rest } = overrides;
 
   return {
     token: 'client-token',
@@ -18,7 +20,7 @@ function authInfo(overrides: Partial<AuthInfo> & { jti?: string; sub?: string } 
     scopes: [],
     expiresAt: NOW_SECONDS + 1800,
     resource: new URL('https://mcp.example.test/mcp'),
-    extra: { sub, workspaceId: Number(sub), jti },
+    extra: { sub, workspaceId: Number(sub), organizationId, jti },
     ...rest,
   };
 }
@@ -81,6 +83,7 @@ describe('createMintedCredentials', () => {
     ['another user', { sub: '99' }],
     ['another client', { clientId: '18' }],
     ['other scopes', { scopes: ['templates:read'] }],
+    ['another organization of the same user and client', { organizationId: 20 }],
   ])('keeps a separate credential for %s', async (_label, overrides) => {
     const fetch = jest.fn<Fetch>(async () => minted('upstream-token', NOW_SECONDS + 300));
     const credentials = provider(fetch);
@@ -89,6 +92,21 @@ describe('createMintedCredentials', () => {
     await credentials.get(authInfo(overrides));
 
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * A master user may connect the same client in two organizations; each organization's calls
+   * must use the credential minted for its own grant.
+   */
+  it('never serves one organization the credential of another', async () => {
+    const fetch = jest.fn<Fetch>()
+      .mockResolvedValueOnce(minted('credential-for-10', NOW_SECONDS + 300))
+      .mockResolvedValueOnce(minted('credential-for-20', NOW_SECONDS + 300));
+    const credentials = provider(fetch);
+
+    expect(await credentials.get(authInfo({ organizationId: 10 }))).toBe('credential-for-10');
+    expect(await credentials.get(authInfo({ organizationId: 20, jti: 'other-grant' }))).toBe('credential-for-20');
+    expect(await credentials.get(authInfo({ organizationId: 10, jti: 'refreshed' }))).toBe('credential-for-10');
   });
 
   it('keys the scopes regardless of their order', async () => {

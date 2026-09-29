@@ -11,7 +11,7 @@ import {
   type JWTVerifyGetKey,
 } from 'jose';
 
-const { createTokenVerifier, WORKSPACE_CLAIM } = await import('../auth/verifier.js');
+const { createTokenVerifier, ORGANIZATION_CLAIM, WORKSPACE_CLAIM } = await import('../auth/verifier.js');
 const { discoverJwksUri, createRemoteKeySetProvider } = await import('../auth/asMetadata.js');
 const { InvalidTokenError, AuthorizationServerUnavailableError } = await import('../auth/errors.js');
 const { loadAuthConfig } = await import('../auth/config.js');
@@ -83,6 +83,21 @@ describe('createTokenVerifier', () => {
     expect(authInfo.extra).toEqual({ sub: '4821', workspaceId: 4821, jti: 'token-id' });
   });
 
+  it('reads the organization the grant was approved in', async () => {
+    const authInfo = await verifier().verify(await sign(claims({ [ORGANIZATION_CLAIM]: 77 })));
+
+    expect(authInfo.extra?.organizationId).toBe(77);
+  });
+
+  /**
+   * Grants approved before the organization was recorded carry no claim and keep working.
+   */
+  it('accepts a token without an organization claim', async () => {
+    const authInfo = await verifier().verify(await sign(claims()));
+
+    expect(authInfo.extra?.organizationId).toBeUndefined();
+  });
+
   it.each([
     ['another audience', async () => sign(claims({ aud: 'https://other.example.test/mcp' }))],
     ['an audience list, even one naming this resource', async () => sign(claims({ aud: [RESOURCE, 'https://other.example.test'] }))],
@@ -102,6 +117,10 @@ describe('createTokenVerifier', () => {
     ['no subject', async () => sign(withoutClaim('sub'))],
     ['no workspace claim', async () => sign(withoutClaim(WORKSPACE_CLAIM))],
     ['a workspace claim that is not an integer', async () => sign(claims({ [WORKSPACE_CLAIM]: '4821' }))],
+    ['an organization claim that is text', async () => sign(claims({ [ORGANIZATION_CLAIM]: '77' }))],
+    ['an organization claim of zero', async () => sign(claims({ [ORGANIZATION_CLAIM]: 0 }))],
+    ['a negative organization claim', async () => sign(claims({ [ORGANIZATION_CLAIM]: -77 }))],
+    ['a fractional organization claim', async () => sign(claims({ [ORGANIZATION_CLAIM]: 7.5 }))],
     ['HS256 signed with the RSA modulus as the HMAC key', async () => {
       const modulus = base64url.decode(publicJwk.n as string);
       return new SignJWT(claims()).setProtectedHeader({ alg: 'HS256', kid: KID }).setExpirationTime('30m').sign(modulus);
