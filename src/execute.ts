@@ -7,19 +7,49 @@ import { API_BASE_URL } from './config.js';
 import { log } from './logger.js';
 
 /**
+ * How a tool call obtains the credential for the API. It is asked only once the
+ * arguments are valid, and told when the API rejected the credential.
+ */
+export interface UpstreamAuth {
+    getToken(): Promise<string>;
+    invalidate(): void;
+}
+
+const HTTP_UNAUTHORIZED = 401;
+
+// Headers a tool argument must never set: tools.ts is generated from the OpenAPI
+// document, so a header parameter could otherwise override credentials or routing.
+const FORBIDDEN_HEADERS = new Set([
+    'authorization',
+    'proxy-authorization',
+    'cookie',
+    'host',
+    'content-length',
+    'transfer-encoding',
+    'connection',
+    'forwarded',
+]);
+const FORBIDDEN_HEADER_PREFIXES = ['x-forwarded-'];
+
+function isForbiddenHeader(name: string): boolean {
+    const header = name.toLowerCase();
+    return FORBIDDEN_HEADERS.has(header) || FORBIDDEN_HEADER_PREFIXES.some(prefix => header.startsWith(prefix));
+}
+
+/**
  * Executes an API tool with the provided arguments
  *
  * @param toolName Name of the tool to execute
  * @param definition Tool definition
  * @param toolArgs Arguments provided by the user
- * @param bearerToken Optional bearer token for JWT authentication
+ * @param upstreamAuth Credentials for the API; without it the request is unauthenticated
  * @returns Call tool result
  */
 export async function executeApiTool(
     toolName: string,
     definition: McpToolDefinition,
     toolArgs: JsonObject,
-    bearerToken?: string
+    upstreamAuth?: UpstreamAuth
 ): Promise<CallToolResult> {
   try {
     // Validate arguments against the input schema
@@ -55,7 +85,11 @@ export async function executeApiTool(
                 queryParams[param.name] = value;
             }
             else if (param.in === 'header') {
-                headers[param.name.toLowerCase()] = String(value);
+                if (isForbiddenHeader(param.name)) {
+                    log.warn(`Ignoring tool argument for protected header '${param.name}' in tool '${toolName}'`);
+                } else {
+                    headers[param.name.toLowerCase()] = String(value);
+                }
             }
         }
     });
@@ -75,12 +109,6 @@ export async function executeApiTool(
     }
 
 
-    // Apply JWT Bearer authentication
-    if (bearerToken) {
-        headers['authorization'] = `Bearer ${bearerToken}`;
-    }
-    
-
     // Prepare the axios request configuration
     const config: AxiosRequestConfig = {
       method: definition.method.toUpperCase(),
@@ -88,48 +116,27 @@ export async function executeApiTool(
       params: queryParams,
       headers: headers,
       timeout: 30000,
+      // Raw bytes: decoding a PDF or image as text would corrupt it beyond recovery
+      responseType: 'arraybuffer',
       ...(requestBodyData !== undefined && { data: requestBodyData }),
     };
 
     log.debug(`Executing tool "${toolName}": ${config.method} ${config.url}`);
     
-    // Execute the request
-    const response = await axios(config);
+    // Execute the request, renewing a rejected credential exactly once
+    let response;
+    try {
+        response = await axios(await authenticated(config, upstreamAuth));
+    } catch (error: unknown) {
+        if (!upstreamAuth || !axios.isAxiosError(error) || error.response?.status !== HTTP_UNAUTHORIZED) {
+            throw error;
+        }
 
-    // Process and format the response
-    let responseText = '';
-    const contentType = response.headers['content-type']?.toLowerCase() || '';
-    
-    // Handle JSON responses
-    if (contentType.includes('application/json') && typeof response.data === 'object' && response.data !== null) {
-         try { 
-             responseText = JSON.stringify(response.data, null, 2); 
-         } catch {
-             responseText = "[Stringify Error]";
-         }
-    } 
-    // Handle string responses
-    else if (typeof response.data === 'string') { 
-         responseText = response.data; 
+        upstreamAuth.invalidate();
+        response = await axios(await authenticated(config, upstreamAuth));
     }
-    // Handle other response types
-    else if (response.data !== undefined && response.data !== null) { 
-         responseText = String(response.data); 
-    }
-    // Handle empty responses
-    else { 
-         responseText = `(Status: ${response.status} - No body content)`; 
-    }
-    
-    // Return formatted response
-    return { 
-        content: [ 
-            { 
-                type: "text", 
-                text: `API Response (Status: ${response.status}):\n${responseText}` 
-            } 
-        ], 
-    };
+
+    return formatResponse(response.status, response.headers as Record<string, unknown>, response.data);
 
   } catch (error: unknown) {
     // Handle errors during execution
@@ -158,6 +165,94 @@ export async function executeApiTool(
 
 
 
+const TEXT_CONTENT_TYPES = [/^text\//, /json/, /xml/, /javascript/, /x-www-form-urlencoded/];
+
+/**
+ * Turns an API response into tool content: JSON pretty-printed, text decoded, and any
+ * other body (PDFs, images) returned byte for byte as an embedded resource.
+ */
+function formatResponse(status: number, headers: Record<string, unknown>, data: unknown): CallToolResult {
+    const contentType = String(headers['content-type'] ?? '').toLowerCase();
+    const body = toBuffer(data);
+
+    if (body === null) {
+        const text = data === undefined || data === null || data === ''
+            ? `(Status: ${status} - No body content)`
+            : typeof data === 'string' ? data : safeStringify(data);
+        return { content: [{ type: 'text', text: `API Response (Status: ${status}):\n${text}` }] };
+    }
+
+    if (body.length === 0) {
+        return { content: [{ type: 'text', text: `API Response (Status: ${status}):\n(Status: ${status} - No body content)` }] };
+    }
+
+    if (contentType === '' || TEXT_CONTENT_TYPES.some(pattern => pattern.test(contentType))) {
+        return { content: [{ type: 'text', text: `API Response (Status: ${status}):\n${decodeText(body, contentType)}` }] };
+    }
+
+    const mimeType = contentType.split(';')[0].trim();
+    const filename = filenameOf(headers['content-disposition']) ?? 'document';
+
+    return {
+        content: [
+            { type: 'text', text: `API Response (Status: ${status}): ${mimeType} file "${filename}", ${body.length} bytes` },
+            { type: 'resource', resource: { uri: `file:///${encodeURIComponent(filename)}`, mimeType, blob: body.toString('base64') } },
+        ],
+    };
+}
+
+function toBuffer(data: unknown): Buffer | null {
+    if (Buffer.isBuffer(data)) {
+        return data;
+    }
+    if (data instanceof ArrayBuffer) {
+        return Buffer.from(data);
+    }
+    if (ArrayBuffer.isView(data)) {
+        return Buffer.from(data.buffer, data.byteOffset, data.byteLength);
+    }
+    return null;
+}
+
+function decodeText(body: Buffer, contentType: string): string {
+    const text = body.toString('utf8');
+
+    if (contentType.includes('json')) {
+        try {
+            return JSON.stringify(JSON.parse(text), null, 2);
+        } catch {
+            return text;
+        }
+    }
+
+    return text;
+}
+
+function safeStringify(value: unknown): string {
+    try {
+        return JSON.stringify(value, null, 2);
+    } catch {
+        return '[Stringify Error]';
+    }
+}
+
+function filenameOf(contentDisposition: unknown): string | null {
+    const match = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(String(contentDisposition ?? ''));
+
+    return match ? decodeURIComponent(match[1]) : null;
+}
+
+/**
+ * Returns the request with the API credential, fetched at the last moment.
+ */
+async function authenticated(config: AxiosRequestConfig, upstreamAuth?: UpstreamAuth): Promise<AxiosRequestConfig> {
+    if (!upstreamAuth) {
+        return config;
+    }
+
+    return { ...config, headers: { ...config.headers, authorization: `Bearer ${await upstreamAuth.getToken()}` } };
+}
+
 /**
  * Formats API errors for better readability
  * 
@@ -168,7 +263,9 @@ function formatApiError(error: AxiosError): string {
     let message = 'API request failed.';
     if (error.response) {
         message = `API Error: Status ${error.response.status} (${error.response.statusText || 'Status text not available'}). `;
-        const responseData = error.response.data;
+        const rawData = error.response.data;
+        const bytes = toBuffer(rawData);
+        const responseData = bytes === null ? rawData : bytes.toString('utf8');
         const MAX_LEN = 200;
         if (typeof responseData === 'string') { 
             message += `Response: ${responseData.substring(0, MAX_LEN)}${responseData.length > MAX_LEN ? '...' : ''}`; 

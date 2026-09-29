@@ -6,36 +6,49 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { v4 as uuid } from 'uuid';
-import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { InitializeRequestSchema, JSONRPCError } from "@modelcontextprotocol/sdk/types.js";
-import { toReqRes, toFetchResponse } from 'fetch-to-node';
 
 // Import server configuration constants and factory
 import { SERVER_NAME, SERVER_VERSION } from './config.js';
 import { createMcpServer } from './server.js';
 import { log } from './logger.js';
+import { loadAuthConfig, type AuthConfig } from './auth/config.js';
+import { buildProtectedResourceMetadata } from './auth/protectedResourceMetadata.js';
+import { requireBearerToken } from './auth/middleware.js';
+import { createRemoteKeySetProvider } from './auth/asMetadata.js';
+import { createTokenVerifier, type TokenVerifier } from './auth/verifier.js';
+import { createMintedCredentials, type UpstreamCredentials } from './credentials/upstream.js';
+import { createInMemorySessionStore, ownedBy, ownerOf, type SessionStore } from './sessions/store.js';
+import { guardRequests, loadTransportLimits } from './transport/guards.js';
+import { identityKey, limitRequests, loadRateLimits, RateLimiter, tooManyRequests } from './transport/rateLimit.js';
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import { loadScopeEnforcement, mayCallTool } from './auth/scopes.js';
+import { challenges } from './auth/challenges.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
 const JSON_RPC = "2.0";
 const SESSION_TTL_MS = parseInt(process.env.SESSION_TTL_MINUTES || '30', 10) * 60 * 1000;
 const SESSION_CLEANUP_INTERVAL_MS = 60 * 1000; // Check every minute
+const SESSION_RETRY_AFTER_SECONDS = '60';
+const WELL_KNOWN_PROTECTED_RESOURCE_PATH = '/.well-known/oauth-protected-resource';
+const METADATA_CACHE_CONTROL = 'public, max-age=3600';
 
 /**
  * StreamableHTTP MCP Server handler
  */
 class MCPStreamableHttpServer {
-  // Store active transports and servers by session ID
-  transports: {[sessionId: string]: StreamableHTTPServerTransport} = {};
-  servers: {[sessionId: string]: Server} = {};
-  // Store authorization tokens per session
-  sessionTokens: {[sessionId: string]: string} = {};
-  // Track last activity per session for TTL expiration
-  private lastActivity: {[sessionId: string]: number} = {};
   private cleanupTimer: ReturnType<typeof setInterval>;
 
-  constructor() {
+  constructor(
+    private readonly credentials: UpstreamCredentials,
+    private readonly resourceMetadataUrl: string,
+    private readonly issuer: string,
+    private readonly maxSessions: number,
+    private readonly sessions: SessionStore = createInMemorySessionStore(),
+    private readonly initializeLimiter: RateLimiter = new RateLimiter(0),
+  ) {
     this.cleanupTimer = setInterval(() => this.cleanupStaleSessions(), SESSION_CLEANUP_INTERVAL_MS);
     this.cleanupTimer.unref();
   }
@@ -44,12 +57,9 @@ class MCPStreamableHttpServer {
    * Remove sessions that have been idle longer than SESSION_TTL_MS
    */
   private cleanupStaleSessions() {
-    const now = Date.now();
-    for (const sessionId of Object.keys(this.lastActivity)) {
-      if (now - this.lastActivity[sessionId] > SESSION_TTL_MS) {
-        log.debug(`Session expired (idle > ${SESSION_TTL_MS / 60000}m): ${sessionId}`);
-        this.destroySession(sessionId);
-      }
+    for (const sessionId of this.sessions.expired(SESSION_TTL_MS, Date.now())) {
+      log.debug(`Session expired (idle > ${SESSION_TTL_MS / 60000}m): ${sessionId}`);
+      this.destroySession(sessionId);
     }
   }
 
@@ -57,13 +67,50 @@ class MCPStreamableHttpServer {
    * Clean up all resources for a session
    */
   private destroySession(sessionId: string) {
+    const session = this.sessions.get(sessionId);
+
+    if (!session) {
+      return;
+    }
+
+    // Forget it first: closing the transport calls back into onclose.
+    this.sessions.delete(sessionId);
+
     try {
-      this.transports[sessionId]?.close();
+      session.transport.close();
     } catch { /* ignore close errors */ }
-    delete this.transports[sessionId];
-    delete this.servers[sessionId];
-    delete this.sessionTokens[sessionId];
-    delete this.lastActivity[sessionId];
+  }
+
+  /**
+   * The session of this request, or null when it belongs to nobody the caller is.
+   * An unknown and a foreign session answer alike, so session ids cannot be probed.
+   */
+  private ownSession(c: any, sessionId: string) {
+    const owner = ownerOf(this.issuer, c.get('authInfo'));
+    const session = this.sessions.get(sessionId);
+
+    if (!owner || !session || !ownedBy(session, owner)) {
+      log.warn(`Refused session "${sessionId}" for another identity`);
+      return null;
+    }
+
+    return session;
+  }
+
+  /**
+   * Handle DELETE requests (spec session termination)
+   */
+  async handleDeleteRequest(c: any) {
+    const sessionId = c.req.header(SESSION_ID_HEADER_NAME);
+
+    if (!sessionId || !this.ownSession(c, sessionId)) {
+      return c.json(this.createErrorResponse('Not Found: unknown session.'), 404);
+    }
+
+    this.destroySession(sessionId);
+    log.debug(`Session terminated: ${sessionId}`);
+
+    return c.body(null, 204);
   }
   
   /**
@@ -81,88 +128,88 @@ class MCPStreamableHttpServer {
    */
   async handlePostRequest(c: any) {
     const sessionId = c.req.header(SESSION_ID_HEADER_NAME);
-    const authHeader = c.req.header('Authorization');
+    const authInfo = c.get('authInfo');
     log.debug(`POST request received ${sessionId ? 'with session ID: ' + sessionId : 'without session ID'}`);
 
     try {
-      const body = await c.req.json();
-      
-      // Convert Fetch Request to Node.js req/res
-      const { req, res } = toReqRes(c.req.raw);
-      
-      // Reuse existing transport if we have a session ID
-      if (sessionId && this.transports[sessionId]) {
-        this.lastActivity[sessionId] = Date.now();
-        const transport = this.transports[sessionId];
-        
-        // Handle the request with the transport
-        await transport.handleRequest(req, res, body);
-        
-        // Cleanup when the response ends
-        res.on('close', () => {
-          log.debug(`Request closed for session ${sessionId}`);
-        });
-        
-        // Convert Node.js response back to Fetch Response
-        return toFetchResponse(res);
+      // Read the body from a copy: the transport needs the request untouched
+      const body = await c.req.raw.clone().json();
+      const refusal = this.scopeRefusal(body, authInfo);
+
+      // A single call can be answered with the step-up challenge a client can act on;
+      // a batch cannot, so its elements are refused one by one by the tool handler.
+      if (refusal) {
+        return c.json(refusal.body, refusal.status, { 'WWW-Authenticate': refusal.wwwAuthenticate });
       }
-      
+
+      // Reuse the session only for the identity that opened it
+      if (sessionId) {
+        const session = this.ownSession(c, sessionId);
+
+        if (!session) {
+          return c.json(this.createErrorResponse('Not Found: unknown session.'), 404);
+        }
+
+        this.sessions.touch(sessionId);
+
+        return await session.transport.handleRequest(c.req.raw, { authInfo });
+      }
+
       // Create new transport for initialize requests
-      if (!sessionId && this.isInitializeRequest(body)) {
+      if (this.isInitializeRequest(body)) {
+        const owner = ownerOf(this.issuer, authInfo);
+
+        if (!owner) {
+          log.error('Refusing a session: the verified token names no subject or client');
+          return c.json(this.createErrorResponse('Unauthorized: the access token names no subject.'), 401);
+        }
+
+        const opened = this.initializeLimiter.take(identityKey(this.issuer, authInfo) ?? '');
+
+        if (!opened.allowed) {
+          log.warn('Refused a new session: the client opens sessions too fast', { subject: owner.subject, client: owner.clientId });
+          return tooManyRequests(c, opened.retryAfterSeconds, 'session limit reached');
+        }
+
+        if (this.sessions.size() >= this.maxSessions) {
+          log.warn(`Refused a new session: at capacity (${this.maxSessions})`);
+          return c.json(
+            this.createErrorResponse('Service Unavailable: session capacity reached.'),
+            503,
+            { 'Retry-After': SESSION_RETRY_AFTER_SECONDS },
+          );
+        }
+
         log.debug("Creating new StreamableHTTP transport for initialize request");
 
-        const transport = new StreamableHTTPServerTransport({
+        const transport = new WebStandardStreamableHTTPServerTransport({
           sessionIdGenerator: () => uuid(),
+          onsessionclosed: (closedSessionId: string) => {
+            log.debug(`Session closed: ${closedSessionId}`);
+            this.destroySession(closedSessionId);
+          },
         });
 
-        // Add error handler for debug purposes
         transport.onerror = (err) => {
           log.error('StreamableHTTP transport error:', err);
         };
 
-        // Extract Bearer token from Authorization header
-        let bearerToken: string | undefined;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          bearerToken = authHeader.substring(7);
-          log.debug('Bearer token provided via Authorization header');
-        }
-
-        // Create a new MCP server instance for this session
-        const newServer = createMcpServer(bearerToken);
-
-        // Connect the transport to the new MCP server
+        // Each tool call resolves its API credential from the verified token of that
+        // request, never from the header
+        const newServer = createMcpServer(this.credentials);
         await newServer.connect(transport);
 
-        // Handle the request with the transport
-        await transport.handleRequest(req, res, body);
-
-        // Store the transport and server if we have a session ID
+        const response = await transport.handleRequest(c.req.raw, { authInfo });
         const newSessionId = transport.sessionId;
+
         if (newSessionId) {
           log.debug(`New session established: ${newSessionId}`);
-          this.transports[newSessionId] = transport;
-          this.servers[newSessionId] = newServer;
-          this.lastActivity[newSessionId] = Date.now();
-          if (bearerToken) {
-            this.sessionTokens[newSessionId] = bearerToken;
-          }
-
-          // Set up clean-up for when the transport is closed
-          transport.onclose = () => {
-            log.debug(`Session closed: ${newSessionId}`);
-            this.destroySession(newSessionId);
-          };
+          this.sessions.add(newSessionId, { transport, server: newServer, owner, lastActivity: Date.now() });
         }
 
-        // Cleanup when the response ends
-        res.on('close', () => {
-          log.debug(`Request closed for new session`);
-        });
-
-        // Convert Node.js response back to Fetch Response
-        return toFetchResponse(res);
+        return response;
       }
-      
+
       // Invalid request (no session ID and not initialize)
       return c.json(
         this.createErrorResponse("Bad Request: invalid session ID or method."),
@@ -177,6 +224,31 @@ class MCPStreamableHttpServer {
     }
   }
   
+  /**
+   * The step-up challenge for a single tools/call the grant does not cover.
+   */
+  private scopeRefusal(body: unknown, authInfo: AuthInfo | undefined) {
+    if (loadScopeEnforcement() !== 'enforce' || Array.isArray(body)) {
+      return null;
+    }
+
+    const request = body as { method?: string; params?: { name?: string } };
+
+    if (request?.method !== 'tools/call' || typeof request.params?.name !== 'string') {
+      return null;
+    }
+
+    const decision = mayCallTool(request.params.name, authInfo?.scopes ?? []);
+
+    if (decision.allowed || decision.required === null) {
+      return null;
+    }
+
+    log.warn(`Refused "${request.params.name}": the token does not grant "${decision.required}"`);
+
+    return challenges.insufficientScope(this.resourceMetadataUrl, [decision.required]);
+  }
+
   /**
    * Create a JSON-RPC error response
    */
@@ -209,33 +281,60 @@ class MCPStreamableHttpServer {
 }
 
 /**
- * Sets up a web server for the MCP server using StreamableHTTP transport
+ * Builds the Hono app with every route, without listening, so tests can drive it
  *
- * @param port The port to listen on (default: 3000)
- * @returns The Hono app instance, the HTTP server, and the actual listening port
+ * @param authConfig OAuth configuration (read from the environment by default)
+ * @returns The Hono app instance
  */
-export async function setupStreamableHttpServer(port = 3000) {
-  // Create Hono app
+export function createHttpApp(
+  authConfig: AuthConfig = loadAuthConfig(),
+  verifier: TokenVerifier = remoteTokenVerifier(authConfig),
+  credentials: UpstreamCredentials = mintedCredentials(authConfig),
+) {
   const app = new Hono();
+  const protectedResourceMetadata = buildProtectedResourceMetadata(authConfig);
 
   // Enable CORS - restrict origins in production via CORS_ORIGIN env var
   // e.g. CORS_ORIGIN="https://example.com,https://app.example.com"
+  // Browser clients can only read the challenge and the session id when they are exposed.
   const corsOrigin = process.env.CORS_ORIGIN;
   app.use('*', cors({
     origin: corsOrigin ? corsOrigin.split(',').map(o => o.trim()) : '*',
+    exposeHeaders: ['WWW-Authenticate', 'Mcp-Session-Id', 'Retry-After'],
   }));
 
   // Create MCP handler (creates new server instances per session)
-  const mcpHandler = new MCPStreamableHttpServer();
+  const limits = loadTransportLimits(authConfig.resource);
+  const rateLimits = loadRateLimits();
+  const mcpHandler = new MCPStreamableHttpServer(
+    credentials,
+    authConfig.resourceMetadataUrl,
+    authConfig.issuer,
+    limits.maxSessions,
+    createInMemorySessionStore(),
+    new RateLimiter(rateLimits.initializePerMinute),
+  );
   
   // Add a simple health check endpoint
   app.get('/health', (c) => {
     return c.json({ status: 'OK', server: SERVER_NAME, version: SERVER_VERSION });
   });
-  
+
+  // Discovery must stay unauthenticated, and must be registered before the static catch-all
+  // below, which would otherwise answer these paths with index.html.
+  const serveProtectedResourceMetadata = (c: any) =>
+    c.json(protectedResourceMetadata, 200, { 'Cache-Control': METADATA_CACHE_CONTROL });
+  app.get(authConfig.resourceMetadataPath, serveProtectedResourceMetadata);
+  app.get(WELL_KNOWN_PROTECTED_RESOURCE_PATH, serveProtectedResourceMetadata);
+  app.all('/.well-known/*', (c) => c.json({ error: 'not_found' }, 404));
+
   // Main MCP endpoint supporting both GET and POST
+  app.use('/mcp', guardRequests(limits));
+  app.use('/mcp', requireBearerToken(authConfig, verifier));
+  app.use('/mcp', limitRequests(new RateLimiter(rateLimits.requestsPerMinute), authConfig.issuer));
   app.get("/mcp", (c) => mcpHandler.handleGetRequest(c));
   app.post("/mcp", (c) => mcpHandler.handlePostRequest(c));
+  app.delete("/mcp", (c) => mcpHandler.handleDeleteRequest(c));
   
   // Static files for the web client (if any)
   app.get('/*', async (c) => {
@@ -289,7 +388,40 @@ export async function setupStreamableHttpServer(port = 3000) {
     
     return c.text('Not Found', 404);
   });
-  
+
+  return app;
+}
+
+function mintedCredentials(authConfig: AuthConfig): UpstreamCredentials {
+  return createMintedCredentials({ url: authConfig.credentialsUrl, issuer: authConfig.issuer });
+}
+
+function remoteTokenVerifier(authConfig: AuthConfig): TokenVerifier {
+  return createTokenVerifier({
+    issuer: authConfig.issuer,
+    audience: authConfig.resource,
+    keySet: createRemoteKeySetProvider(authConfig),
+  });
+}
+
+/**
+ * Sets up a web server for the MCP server using StreamableHTTP transport
+ *
+ * @param port The port to listen on (default: 3000)
+ * @param options Overrides for the OAuth configuration, token verifier and API credentials (tests)
+ * @returns The Hono app instance, the HTTP server, and the actual listening port
+ */
+export async function setupStreamableHttpServer(
+  port = 3000,
+  options: { authConfig?: AuthConfig; verifier?: TokenVerifier; credentials?: UpstreamCredentials } = {},
+) {
+  const authConfig = options.authConfig ?? loadAuthConfig();
+  const app = createHttpApp(
+    authConfig,
+    options.verifier ?? remoteTokenVerifier(authConfig),
+    options.credentials ?? mintedCredentials(authConfig),
+  );
+
   // Start the server
   const server = serve({
     fetch: app.fetch,

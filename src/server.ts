@@ -13,6 +13,8 @@ import { log } from './logger.js';
 import { simplifySchemaForOpenAI } from './schema.js';
 import { toolDefinitionMap } from './tools.js';
 import { executeApiTool } from './execute.js';
+import type { UpstreamCredentials } from './credentials/upstream.js';
+import { loadScopeEnforcement, mayCallTool, visibleTools } from './auth/scopes.js';
 
 /**
  * Tool annotations — hints for MCP clients about tool behavior
@@ -24,7 +26,7 @@ const toolAnnotations: Record<string, { title: string; readOnlyHint?: boolean; d
     decrypt_document:                    { title: "Decrypt PDF Document",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     optimize_document:                   { title: "Optimize PDF Size",                   readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     make_accessible:                     { title: "Add Accessibility Tags to PDF",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    extract_form_fields:                  { title: "Extract Form Fields from PDF",        readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    extract_form_fields:                  { title: "Extract Form Fields from PDF",        readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     fill_form_fields:                     { title: "Fill PDF Form Fields",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     get_templates:                       { title: "List Templates",                      readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     create_template:                     { title: "Create Template",                     readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
@@ -36,7 +38,7 @@ const toolAnnotations: Record<string, { title: string; readOnlyHint?: boolean; d
     delete_template:                     { title: "Delete Template",                     readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
     get_template_data:                    { title: "Get Template Data Fields",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     copy_template:                       { title: "Copy Template",                       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    open_editor:                         { title: "Open Template Editor",                readOnlyHint: true,  destructiveHint: false,                        openWorldHint: true },
+    open_editor:                         { title: "Open Template Editor",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     list_template_versions:               { title: "List Template Versions",              readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     get_template_version:                 { title: "Get Template Version",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     delete_template_version:              { title: "Delete Template Version",             readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
@@ -101,9 +103,9 @@ const prompts = [
 /**
  * Factory function to create new MCP Server instances
  * Each connection needs its own server instance
- * @param bearerToken Optional bearer token for authentication (required for API calls)
+ * @param credentials Credentials for the API, resolved per call from the verified access token
  */
-export function createMcpServer(bearerToken?: string): Server {
+export function createMcpServer(credentials?: UpstreamCredentials): Server {
     const server = new Server(
         {
             name: SERVER_NAME,
@@ -119,8 +121,13 @@ export function createMcpServer(bearerToken?: string): Server {
         }
     );
 
-    server.setRequestHandler(ListToolsRequestSchema, async () => {
-        const toolsForClient: Tool[] = Array.from(toolDefinitionMap.values()).map(def => ({
+    server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
+        const enforcement = loadScopeEnforcement();
+        const scopes = extra.authInfo?.scopes ?? [];
+        const allowed = enforcement === 'off' ? null : new Set(visibleTools(scopes));
+        const toolsForClient: Tool[] = Array.from(toolDefinitionMap.values())
+            .filter(def => allowed === null || allowed.has(def.name))
+            .map(def => ({
             name: def.name,
             description: def.description,
             inputSchema: simplifySchemaForOpenAI(def.inputSchema),
@@ -129,14 +136,32 @@ export function createMcpServer(bearerToken?: string): Server {
         return { tools: toolsForClient };
     });
 
-    server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest): Promise<CallToolResult> => {
+    server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest, extra): Promise<CallToolResult> => {
         const { name: toolName, arguments: toolArgs } = request.params;
         const toolDefinition = toolDefinitionMap.get(toolName);
         if (!toolDefinition) {
             log.warn(`Unknown tool requested: ${toolName}`);
             return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }], isError: true };
         }
-        return await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, bearerToken);
+        const enforcement = loadScopeEnforcement();
+        const decision = mayCallTool(toolName, extra.authInfo?.scopes ?? []);
+
+        if (!decision.allowed && enforcement !== 'off') {
+            log.warn(`Tool "${toolName}" needs scope "${decision.required}", which this token does not grant`);
+
+            if (enforcement === 'enforce') {
+                return {
+                    content: [{ type: "text", text: `Error: this connection is not allowed to call "${toolName}". It needs the "${decision.required}" permission; reconnect and grant it.` }],
+                    isError: true,
+                };
+            }
+        }
+
+        const upstreamAuth = credentials && {
+            getToken: () => credentials.get(extra.authInfo),
+            invalidate: () => credentials.invalidate(extra.authInfo),
+        };
+        return await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, upstreamAuth);
     });
 
     server.setRequestHandler(ListPromptsRequestSchema, async () => {

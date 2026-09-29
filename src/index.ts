@@ -11,6 +11,7 @@ dotenv.config();
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { setupStreamableHttpServer } from "./streamable-http.js";
 import { createMcpServer } from './server.js';
+import { createStaticCredentials } from './credentials/upstream.js';
 import { log } from './logger.js';
 
 // Re-export public API for consumers
@@ -19,7 +20,8 @@ export { type McpToolDefinition, type JsonObject } from './types.js';
 export { SERVER_NAME, SERVER_VERSION, API_BASE_URL } from './config.js';
 export { simplifySchemaForOpenAI } from './schema.js';
 export { createMcpServer } from './server.js';
-export { executeApiTool } from './execute.js';
+export { executeApiTool, type UpstreamAuth } from './execute.js';
+export { createMintedCredentials, createStaticCredentials, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
 
 /**
  * Main function to start the server
@@ -44,15 +46,13 @@ async function main() {
     // Set up Stdio transport (default)
     log.info('Starting MCP server in stdio mode...');
     try {
-      // In stdio mode, read bearer token from environment variable
-      const bearerToken = process.env.BEARER_TOKEN_JWT;
-      if (bearerToken) {
-        log.debug('Bearer token configured from BEARER_TOKEN_JWT');
-      } else {
-        log.warn('No BEARER_TOKEN_JWT found - API calls may fail without authentication');
+      // stdio has no OAuth; a fixed API token may be configured for local development only
+      const devApiToken = process.env.MCP_DEV_API_TOKEN;
+      if (!devApiToken) {
+        log.warn('No MCP_DEV_API_TOKEN set - API calls from stdio mode are unauthenticated');
       }
 
-      const stdioServer = createMcpServer(bearerToken);
+      const stdioServer = createMcpServer(devApiToken ? createStaticCredentials(devApiToken) : undefined);
       const transport = new StdioServerTransport();
       await stdioServer.connect(transport);
       log.info('MCP server running in stdio mode');

@@ -13,6 +13,12 @@ jest.unstable_mockModule('axios', () => ({
 const { setupStreamableHttpServer } = await import('../streamable-http.js');
 const { SERVER_NAME, SERVER_VERSION } = await import('../config.js');
 
+// Every request to /mcp must carry a bearer token
+const AUTHORIZATION = { 'Authorization': 'Bearer test-token' };
+const acceptingVerifier = {
+  verify: async (token: string) => ({ token, clientId: 'test-client', scopes: [], extra: { sub: 'test-user' } }),
+};
+
 // Servers to close after all tests
 const servers: any[] = [];
 afterAll(() => {
@@ -26,7 +32,7 @@ describe('setupStreamableHttpServer', () => {
   let baseUrl: string;
 
   it('should create an app instance and return port info', async () => {
-    app = await setupStreamableHttpServer(0);
+    app = await setupStreamableHttpServer(0, { verifier: acceptingVerifier });
     servers.push(app.server);
     baseUrl = `http://localhost:${app.port}`;
     expect(app).toBeDefined();
@@ -50,14 +56,14 @@ describe('setupStreamableHttpServer', () => {
 
   describe('MCP endpoint', () => {
     it('should return 405 for GET /mcp', async () => {
-      const res = await fetch(`${baseUrl}/mcp`);
+      const res = await fetch(`${baseUrl}/mcp`, { headers: AUTHORIZATION });
       expect(res.status).toBe(405);
     });
 
     it('should return 400 for POST /mcp without session or initialize', async () => {
       const res = await fetch(`${baseUrl}/mcp`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...AUTHORIZATION },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
       });
 
@@ -67,17 +73,19 @@ describe('setupStreamableHttpServer', () => {
       expect(body.error.message).toContain('Bad Request');
     });
 
-    it('should return 400 for POST /mcp with invalid session ID', async () => {
+    /** An unknown session and a session of someone else answer alike, so ids cannot be probed. */
+    it('should return 404 for POST /mcp with invalid session ID', async () => {
       const res = await fetch(`${baseUrl}/mcp`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'mcp-session-id': 'nonexistent-session-id',
+          ...AUTHORIZATION,
         },
         body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/list', id: 1 }),
       });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(404);
     });
   });
 
@@ -201,7 +209,7 @@ describe('MCP session lifecycle (real HTTP)', () => {
   let baseUrl: string;
 
   it('should initialize, reuse session, and handle tools/list', async () => {
-    app = await setupStreamableHttpServer(0);
+    app = await setupStreamableHttpServer(0, { verifier: acceptingVerifier });
     servers.push(app.server);
     baseUrl = `http://localhost:${app.port}`;
 
@@ -211,7 +219,7 @@ describe('MCP session lifecycle (real HTTP)', () => {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/event-stream',
-        'Authorization': 'Bearer test-lifecycle-token',
+        ...AUTHORIZATION,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -239,6 +247,7 @@ describe('MCP session lifecycle (real HTTP)', () => {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/event-stream',
         'mcp-session-id': sessionId!,
+        ...AUTHORIZATION,
       },
       body: JSON.stringify({
         jsonrpc: '2.0',
@@ -251,7 +260,7 @@ describe('MCP session lifecycle (real HTTP)', () => {
     await listRes.text();
   });
 
-  it('should initialize without bearer token', async () => {
+  it('should challenge an initialize without a bearer token', async () => {
     const res = await fetch(`${baseUrl}/mcp`, {
       method: 'POST',
       headers: {
@@ -270,7 +279,8 @@ describe('MCP session lifecycle (real HTTP)', () => {
       }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(401);
+    expect(res.headers.get('www-authenticate')).toMatch(/^Bearer resource_metadata="/);
     await res.text();
   });
 
@@ -280,6 +290,7 @@ describe('MCP session lifecycle (real HTTP)', () => {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json, text/event-stream',
+        ...AUTHORIZATION,
       },
       body: JSON.stringify([{
         jsonrpc: '2.0',
@@ -300,7 +311,7 @@ describe('MCP session lifecycle (real HTTP)', () => {
   it('should handle malformed JSON body gracefully', async () => {
     const res = await fetch(`${baseUrl}/mcp`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...AUTHORIZATION },
       body: '{not valid json',
     });
 
@@ -323,7 +334,7 @@ describe('setupStreamableHttpServer with custom CORS', () => {
 
   it('should restrict CORS when CORS_ORIGIN is set', async () => {
     process.env.CORS_ORIGIN = 'https://example.com,https://app.example.com';
-    const corsApp = await setupStreamableHttpServer(0);
+    const corsApp = await setupStreamableHttpServer(0, { verifier: acceptingVerifier });
     servers.push(corsApp.server);
 
     const res = await fetch(`http://localhost:${corsApp.port}/health`, {
