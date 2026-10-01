@@ -471,3 +471,77 @@ describe('tool schemas are Gemini-compatible (no empty-string enums)', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * Clients that map tool schemas onto a single-type dialect (Gemini function declarations,
+ * the OpenAPI 3.0 subset) refuse or mishandle a type array such as ["object", "null"].
+ */
+describe('nullable type arrays', () => {
+  it('serves a nullable object as an object, keeping its properties', () => {
+    const result = simplifySchemaForOpenAI({
+      description: 'Defines page size if layout is repeated on the page',
+      type: ['object', 'null'],
+      properties: { width: { type: 'number' } },
+    });
+
+    expect(result).toEqual({
+      description: 'Defines page size if layout is repeated on the page',
+      type: 'object',
+      properties: { width: { type: 'number' } },
+    });
+  });
+
+  it('serves a nullable string as a string', () => {
+    expect(simplifySchemaForOpenAI({ type: ['string', 'null'] })).toEqual({ type: 'string' });
+  });
+
+  it('keeps the first type of a union, as it keeps the first branch of an anyOf', () => {
+    expect(simplifySchemaForOpenAI({ type: ['string', 'number', 'null'] })).toEqual({ type: 'string' });
+  });
+
+  it('serves a field that can only be null as null', () => {
+    expect(simplifySchemaForOpenAI({ type: ['null'] })).toEqual({ type: 'null' });
+  });
+
+  it('reaches nullable fields inside properties and array items', () => {
+    const result = simplifySchemaForOpenAI({
+      type: 'object',
+      properties: {
+        pages: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              layout: { type: ['object', 'null'] },
+              backgroundImage: { type: ['string', 'null'] },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.properties.pages.items.properties.layout.type).toBe('object');
+    expect(result.properties.pages.items.properties.backgroundImage.type).toBe('string');
+  });
+});
+
+describe('tool schemas use one type per field', () => {
+  function collectTypeArrays(node: any, path: string, found: string[]): string[] {
+    if (!node || typeof node !== 'object') return found;
+    if (Array.isArray(node)) {
+      node.forEach((item, index) => collectTypeArrays(item, `${path}[${index}]`, found));
+      return found;
+    }
+    if (Array.isArray(node.type)) found.push(path);
+    for (const [key, value] of Object.entries(node)) collectTypeArrays(value, `${path}.${key}`, found);
+    return found;
+  }
+
+  it('no sanitized tool schema contains a type array', () => {
+    const offenders: string[] = [];
+    for (const [name, def] of toolDefinitionMap) {
+      collectTypeArrays(simplifySchemaForOpenAI(def.inputSchema), name, offenders);
+    }
+    expect(offenders).toEqual([]);
+  });
+});
