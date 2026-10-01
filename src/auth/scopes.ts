@@ -77,6 +77,11 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   create_facturx_einvoice: 'einvoice:write',
 };
 
+/** Every scope a tool needs, which is what clients are told to request. */
+export const SUPPORTED_SCOPES: string[] = [
+  ...new Set(Object.values(TOOL_SCOPES).filter((scope): scope is string => scope !== null)),
+].sort();
+
 export function loadScopeEnforcement(env: NodeJS.ProcessEnv = process.env): ScopeEnforcement {
   const mode = env.MCP_SCOPE_ENFORCEMENT;
 

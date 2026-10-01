@@ -12,10 +12,21 @@ const { buildProtectedResourceMetadata } = await import('../auth/protectedResour
 const { challenges } = await import('../auth/challenges.js');
 const { createHttpApp } = await import('../streamable-http.js');
 const { InvalidTokenError, AuthorizationServerUnavailableError } = await import('../auth/errors.js');
+const { TOOL_SCOPES } = await import('../auth/scopes.js');
 
 const RESOURCE = 'https://mcp.example.test/mcp';
 const ISSUER = 'https://auth.example.test';
 const METADATA_URL = 'https://mcp.example.test/.well-known/oauth-protected-resource/mcp';
+
+/** The scopes the authorization server advertises; clients request the ones named here. */
+const SCOPES = [
+  'documents:delete', 'documents:read', 'documents:write',
+  'einvoice:write',
+  'forms:delete', 'forms:read', 'forms:share', 'forms:write',
+  'pdf:write',
+  'templates:delete', 'templates:read', 'templates:write',
+  'workspaces:delete', 'workspaces:read', 'workspaces:write',
+];
 
 const config = loadAuthConfig({ MCP_RESOURCE_URL: RESOURCE, OAUTH_ISSUER: ISSUER });
 
@@ -111,11 +122,21 @@ describe('buildProtectedResourceMetadata', () => {
       authorization_servers: [ISSUER],
       bearer_methods_supported: ['header'],
       resource_name: 'PDF Generator API',
+      scopes_supported: SCOPES,
     });
   });
 
-  it('never advertises offline_access or an empty scope list', () => {
-    expect(buildProtectedResourceMetadata(config)).not.toHaveProperty('scopes_supported');
+  /**
+   * MCP clients request the scopes listed here; without them they ask for none and the
+   * consent screen cannot show what the application will be allowed to do.
+   */
+  it('advertises exactly the scopes its tools need, and never offline_access', () => {
+    const needed = new Set(Object.values(TOOL_SCOPES).filter(scope => scope !== null));
+    const advertised = buildProtectedResourceMetadata(config).scopes_supported ?? [];
+
+    expect(new Set(advertised)).toEqual(needed);
+    expect(advertised).toHaveLength(needed.size);
+    expect(advertised).not.toContain('offline_access');
   });
 });
 
@@ -127,21 +148,21 @@ describe('challenges', () => {
   it.each([
     [
       'missing credentials',
-      () => challenges.missingCredentials(METADATA_URL),
+      () => challenges.missingCredentials(METADATA_URL, SCOPES),
       401,
-      `Bearer resource_metadata="${METADATA_URL}"`,
+      `Bearer resource_metadata="${METADATA_URL}", scope="${SCOPES.join(' ')}"`,
     ],
     [
       'a malformed Authorization header',
-      () => challenges.invalidRequest(METADATA_URL),
+      () => challenges.invalidRequest(METADATA_URL, SCOPES),
       401,
-      `Bearer error="invalid_request", error_description="The Authorization header must be a Bearer token", resource_metadata="${METADATA_URL}"`,
+      `Bearer error="invalid_request", scope="${SCOPES.join(' ')}", error_description="The Authorization header must be a Bearer token", resource_metadata="${METADATA_URL}"`,
     ],
     [
       'an invalid, expired or foreign token',
-      () => challenges.invalidToken(METADATA_URL),
+      () => challenges.invalidToken(METADATA_URL, SCOPES),
       401,
-      `Bearer error="invalid_token", error_description="The access token is not valid", resource_metadata="${METADATA_URL}"`,
+      `Bearer error="invalid_token", scope="${SCOPES.join(' ')}", error_description="The access token is not valid", resource_metadata="${METADATA_URL}"`,
     ],
     [
       'insufficient scope',
@@ -157,12 +178,20 @@ describe('challenges', () => {
   });
 
   it('carries no error code when no credentials were sent (RFC 6750 §3.1)', () => {
-    expect(challenges.missingCredentials(METADATA_URL).body).not.toHaveProperty('error');
+    expect(challenges.missingCredentials(METADATA_URL, SCOPES).body).not.toHaveProperty('error');
   });
 
   it.each([
-    ['invalid_request', () => challenges.invalidRequest(METADATA_URL)],
-    ['invalid_token', () => challenges.invalidToken(METADATA_URL)],
+    ['missing credentials', () => challenges.missingCredentials(METADATA_URL, [])],
+    ['a malformed Authorization header', () => challenges.invalidRequest(METADATA_URL, [])],
+    ['an invalid token', () => challenges.invalidToken(METADATA_URL, [])],
+  ])('names no scope for %s when there are none to name', (_label, build) => {
+    expect(build().wwwAuthenticate).not.toMatch(/scope=/);
+  });
+
+  it.each([
+    ['invalid_request', () => challenges.invalidRequest(METADATA_URL, SCOPES)],
+    ['invalid_token', () => challenges.invalidToken(METADATA_URL, SCOPES)],
     ['insufficient_scope', () => challenges.insufficientScope(METADATA_URL, ['templates:read'])],
   ])('answers %s with an OAuth error object', (error, build) => {
     const body = build().body;
@@ -201,7 +230,7 @@ describe('HTTP app', () => {
     const res = await app.request('/mcp', { method: 'POST', body: '{}' });
 
     expect(res.status).toBe(401);
-    expect(res.headers.get('www-authenticate')).toBe(`Bearer resource_metadata="${METADATA_URL}"`);
+    expect(res.headers.get('www-authenticate')).toBe(`Bearer resource_metadata="${METADATA_URL}", scope="${SCOPES.join(' ')}"`);
     expect(res.headers.get('content-type')).toMatch(/^application\/json/);
   });
 
@@ -214,7 +243,7 @@ describe('HTTP app', () => {
     const res = await app.request('/mcp', { method: 'POST', body: '{}', headers: { Authorization: authorization } });
 
     expect(res.status).toBe(401);
-    expect(res.headers.get('www-authenticate')).toBe(challenges.invalidRequest(METADATA_URL).wwwAuthenticate);
+    expect(res.headers.get('www-authenticate')).toBe(challenges.invalidRequest(METADATA_URL, SCOPES).wwwAuthenticate);
   });
 
   it('lets a well-formed bearer token through to the MCP handler', async () => {
@@ -229,8 +258,8 @@ describe('HTTP app', () => {
     const res = await rejecting.request('/mcp', { method: 'POST', body: '{}', headers: { Authorization: 'Bearer abc.def.ghi' } });
 
     expect(res.status).toBe(401);
-    expect(res.headers.get('www-authenticate')).toBe(challenges.invalidToken(METADATA_URL).wwwAuthenticate);
-    expect(await res.json()).toEqual(challenges.invalidToken(METADATA_URL).body);
+    expect(res.headers.get('www-authenticate')).toBe(challenges.invalidToken(METADATA_URL, SCOPES).wwwAuthenticate);
+    expect(await res.json()).toEqual(challenges.invalidToken(METADATA_URL, SCOPES).body);
   });
 
   /**

@@ -6,6 +6,7 @@ import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { log } from '../logger.js';
 import type { AuthConfig } from './config.js';
 import { challenges, type Challenge } from './challenges.js';
+import { SUPPORTED_SCOPES } from './scopes.js';
 import { AuthorizationServerUnavailableError, InvalidTokenError } from './errors.js';
 import type { TokenVerifier } from './verifier.js';
 
@@ -24,20 +25,20 @@ export function requireBearerToken(config: AuthConfig, verifier: TokenVerifier):
     const authorization = c.req.header('Authorization');
 
     if (authorization === undefined) {
-      return respondWithChallenge(c, challenges.missingCredentials(config.resourceMetadataUrl));
+      return respondWithChallenge(c, challenges.missingCredentials(config.resourceMetadataUrl, SUPPORTED_SCOPES));
     }
 
     const match = BEARER_HEADER.exec(authorization);
 
     if (!match) {
-      return respondWithChallenge(c, challenges.invalidRequest(config.resourceMetadataUrl));
+      return respondWithChallenge(c, challenges.invalidRequest(config.resourceMetadataUrl, SUPPORTED_SCOPES));
     }
 
     try {
       c.set('authInfo', await verifier.verify(match[1]));
     } catch (error) {
       if (error instanceof InvalidTokenError) {
-        return respondWithChallenge(c, challenges.invalidToken(config.resourceMetadataUrl));
+        return respondWithChallenge(c, challenges.invalidToken(config.resourceMetadataUrl, SUPPORTED_SCOPES));
       }
 
       if (error instanceof AuthorizationServerUnavailableError) {

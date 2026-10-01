@@ -7,13 +7,14 @@ import {
   type OAuthProtectedResourceMetadata,
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { AuthConfig } from './config.js';
+import { SUPPORTED_SCOPES } from './scopes.js';
 
 const RESOURCE_NAME = 'PDF Generator API';
 
 /**
  * Parsed against the SDK schema so a malformed document stops the server at startup
- * instead of failing discovery in clients. scopes_supported is left out until scopes
- * exist: an empty list is worse than none for strict clients.
+ * instead of failing discovery in clients. MCP clients request the scopes listed in
+ * scopes_supported; an empty list is worse than none for strict clients.
  */
 export function buildProtectedResourceMetadata(config: AuthConfig): OAuthProtectedResourceMetadata {
   return OAuthProtectedResourceMetadataSchema.parse({
@@ -21,5 +22,6 @@ export function buildProtectedResourceMetadata(config: AuthConfig): OAuthProtect
     authorization_servers: [config.issuer],
     bearer_methods_supported: ['header'],
     resource_name: RESOURCE_NAME,
+    ...(SUPPORTED_SCOPES.length > 0 ? { scopes_supported: SUPPORTED_SCOPES } : {}),
   });
 }
