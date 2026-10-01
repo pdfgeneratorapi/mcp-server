@@ -47,6 +47,15 @@ export function simplifySchemaForOpenAI(schema: any): any {
         if (!simplified.description) delete simplified.description;
     }
 
+    // A nullable field written as a type array (["object", "null"]) is refused or
+    // mishandled by clients that map schemas onto a single-type dialect, such as Gemini
+    // function declarations. Keep the first non-null type, as anyOf keeps its first
+    // option; arguments are still validated against the tool definition, so null stays
+    // accepted.
+    if (Array.isArray(simplified.type)) {
+        simplified.type = simplified.type.find((type: unknown) => type !== 'null') ?? 'null';
+    }
+
     // Ensure type exists
     if (!simplified.type && simplified.properties) {
         simplified.type = 'object';

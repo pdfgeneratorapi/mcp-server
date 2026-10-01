@@ -13,6 +13,7 @@ jest.unstable_mockModule('axios', () => {
 
 // Import after mocking
 const { executeApiTool } = await import('../execute.js');
+const { toolDefinitionMap } = await import('../tools.js');
 
 function makeTool(overrides: Partial<McpToolDefinition> = {}): McpToolDefinition {
   return {
@@ -656,5 +657,26 @@ describe('executeApiTool', () => {
 
     const config = mockAxios.mock.calls[0][0] as any;
     expect(config.data).toBeUndefined();
+  });
+});
+
+/**
+ * Clients see each nullable field with a single type, but arguments are validated against
+ * the tool definition itself, so null is still accepted where the API allows it.
+ */
+describe('executeApiTool with nullable fields', () => {
+  it('accepts null for the nullable fields of create_template', async () => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: { response: {} } });
+    const requestBody = {
+      name: 'Labels',
+      layout: { repeatLayout: null },
+      pages: [{ layout: null, backgroundImage: null }],
+    };
+
+    const result = await executeApiTool('create_template', toolDefinitionMap.get('create_template')!, { requestBody });
+
+    expect(result.isError).toBeFalsy();
+    expect(mockAxios).toHaveBeenCalledTimes(1);
+    expect((mockAxios.mock.calls[0][0] as any).data).toMatchObject(requestBody);
   });
 });
