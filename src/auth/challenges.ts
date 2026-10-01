@@ -27,21 +27,27 @@ function bearer(parameters: Array<[string, string]>): string {
   return `Bearer ${parameters.map(([name, value]) => `${name}=${quote(value)}`).join(', ')}`;
 }
 
+/** The scopes a new token should carry (RFC 6750 §3), which MCP clients request first. */
+function scope(scopes: string[]): Array<[string, string]> {
+  return scopes.length > 0 ? [['scope', scopes.join(' ')]] : [];
+}
+
 export const challenges = {
   /** No credentials at all: no error code, only where to find the authorization server. */
-  missingCredentials(resourceMetadataUrl: string): Challenge {
+  missingCredentials(resourceMetadataUrl: string, scopes: string[]): Challenge {
     return {
       status: 401,
-      wwwAuthenticate: bearer([['resource_metadata', resourceMetadataUrl]]),
+      wwwAuthenticate: bearer([['resource_metadata', resourceMetadataUrl], ...scope(scopes)]),
       body: { error_description: MISSING_CREDENTIALS_DESCRIPTION },
     };
   },
 
-  invalidRequest(resourceMetadataUrl: string): Challenge {
+  invalidRequest(resourceMetadataUrl: string, scopes: string[]): Challenge {
     return {
       status: 401,
       wwwAuthenticate: bearer([
         ['error', 'invalid_request'],
+        ...scope(scopes),
         ['error_description', INVALID_REQUEST_DESCRIPTION],
         ['resource_metadata', resourceMetadataUrl],
       ]),
@@ -50,11 +56,12 @@ export const challenges = {
   },
 
   /** Deliberately the same for a bad signature, an expired token and a wrong audience. */
-  invalidToken(resourceMetadataUrl: string): Challenge {
+  invalidToken(resourceMetadataUrl: string, scopes: string[]): Challenge {
     return {
       status: 401,
       wwwAuthenticate: bearer([
         ['error', 'invalid_token'],
+        ...scope(scopes),
         ['error_description', INVALID_TOKEN_DESCRIPTION],
         ['resource_metadata', resourceMetadataUrl],
       ]),
