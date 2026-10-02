@@ -226,6 +226,14 @@ describe('HTTP app', () => {
     expect((await app.request('/health')).status).toBe(200);
   });
 
+  it('serves the icon without credentials, as a PNG', async () => {
+    const res = await app.request('/icon.png');
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(Buffer.from(await res.arrayBuffer()).subarray(1, 4).toString()).toBe('PNG');
+  });
+
   it('challenges a request to /mcp without credentials', async () => {
     const res = await app.request('/mcp', { method: 'POST', body: '{}' });
 
