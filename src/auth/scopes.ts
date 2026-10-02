@@ -20,6 +20,9 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   get_status: null,
   get_template_schema: null,
   get_einvoice_schema: null,
+  // The public template library: shared templates, no customer data.
+  get_template_library: null,
+  get_template_library_item: null,
 
   get_templates: 'templates:read',
   get_template: 'templates:read',
@@ -40,10 +43,16 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   get_documents: 'documents:read',
   get_document: 'documents:read',
   get_async_job_status: 'documents:read',
+  get_document_actions: 'documents:read',
+  get_document_signatures: 'documents:read',
+  get_document_versions: 'documents:read',
   generate_document: 'documents:write',
   generate_document_async: 'documents:write',
   generate_document_batch: 'documents:write',
   generate_document_batch_async: 'documents:write',
+  store_document: 'documents:write',
+  // Mints a link to view, and sign, a stored document.
+  generate_viewer_url: 'documents:write',
   delete_document: 'documents:delete',
 
   get_workspaces: 'workspaces:read',
@@ -57,6 +66,8 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   update_form: 'forms:write',
   import_form: 'forms:write',
   delete_form: 'forms:delete',
+  open_form_builder: 'forms:write',
+  open_form_builder_for_existing_form: 'forms:write',
   // Mints a public link anyone can open: a different grant from editing a form.
   share_form: 'forms:share',
 
@@ -71,6 +82,7 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   convert_html_to_pdf: 'pdf:write',
   convert_url_to_pdf: 'pdf:write',
   generate_qr_code: 'pdf:write',
+  convert_pdf_to_image: 'pdf:write',
 
   create_einvoice: 'einvoice:write',
   create_xrechnung_einvoice: 'einvoice:write',
