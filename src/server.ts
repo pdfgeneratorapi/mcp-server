@@ -69,6 +69,16 @@ const toolAnnotations: Record<string, { title: string; readOnlyHint?: boolean; d
     create_xrechnung_einvoice:            { title: "Create XRechnung E-Invoice",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     create_facturx_einvoice:              { title: "Create Factur-X E-Invoice",           readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     get_einvoice_schema:                  { title: "Get E-Invoice JSON Schema",           readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_document_actions:                { title: "List Document Actions",              readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_document_signatures:             { title: "Validate Document Signatures",       readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_document_versions:               { title: "List Document Versions",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    store_document:                      { title: "Store PDF in Document Storage",      readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    generate_viewer_url:                 { title: "Create Document Viewer URL",         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    open_form_builder:                   { title: "Open Form Builder",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    open_form_builder_for_existing_form: { title: "Open Form Builder for a Form",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    convert_pdf_to_image:                { title: "Convert PDF to Images",              readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_template_library:                { title: "List Library Templates",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_template_library_item:           { title: "Get Library Template",               readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
 };
 
 /**

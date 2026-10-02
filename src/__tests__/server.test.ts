@@ -39,6 +39,20 @@ describe('createMcpServer', () => {
       }
     });
 
+    // Clients decide from these hints whether to ask before calling a tool, so none may be left out.
+    it('gives every tool a title and its read-only and destructive hints', async () => {
+      const server = createMcpServer(createStaticCredentials('test-token'));
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      const client = new Client({ name: 'test-client', version: '1.0.0' });
+      await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+
+      const { tools } = await client.listTools();
+
+      expect(tools.filter((tool) => !tool.annotations?.title
+        || typeof tool.annotations.readOnlyHint !== 'boolean'
+        || typeof tool.annotations.destructiveHint !== 'boolean').map((tool) => tool.name)).toEqual([]);
+    });
+
     it('should return tools via MCP protocol', async () => {
       const server = createMcpServer(createStaticCredentials('test-token'));
       const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
