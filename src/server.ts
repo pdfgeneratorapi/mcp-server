@@ -9,6 +9,7 @@ import {
   type CallToolRequest
 } from "@modelcontextprotocol/sdk/types.js";
 import { SERVER_NAME, SERVER_VERSION } from './config.js';
+import { SERVER_ICON } from './icon.js';
 import { log } from './logger.js';
 import { simplifySchemaForOpenAI } from './schema.js';
 import { toolDefinitionMap } from './tools.js';
@@ -123,7 +124,7 @@ export function createMcpServer(credentials?: UpstreamCredentials): Server {
             title: "PDF Generator API",
             description: "MCP server for the PDF Generator API — generate PDFs from templates, manage templates and workspaces, watermark, encrypt, optimize, convert HTML/URL to PDF, fill PDF forms, create e-invoices, generate QR codes, and more.",
             websiteUrl: "https://pdfgeneratorapi.com",
-            icons: [{ src: "https://pdfgeneratorapi.com/images/logo.svg" }],
+            icons: [SERVER_ICON],
         },
         {
             capabilities: { tools: {}, prompts: {} },

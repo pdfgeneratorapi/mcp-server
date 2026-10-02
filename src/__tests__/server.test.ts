@@ -53,6 +53,21 @@ describe('createMcpServer', () => {
         || typeof tool.annotations.destructiveHint !== 'boolean').map((tool) => tool.name)).toEqual([]);
     });
 
+    // The icon used to point at a page that answers 404, so clients showed a generic one.
+    it('announces the PDF Generator API icon, inline, as public/icon.png', async () => {
+      const server = createMcpServer(createStaticCredentials('test-token'));
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      const client = new Client({ name: 'test-client', version: '1.0.0' });
+      await Promise.all([client.connect(clientTransport), server.connect(serverTransport)]);
+      const { readFileSync } = await import('node:fs');
+      const { resolve } = await import('node:path');
+      const png = readFileSync(resolve(process.cwd(), 'public/icon.png')).toString('base64');
+
+      expect(client.getServerVersion()?.icons).toEqual([
+        { src: `data:image/png;base64,${png}`, mimeType: 'image/png', sizes: ['256x256'] },
+      ]);
+    });
+
     it('should return tools via MCP protocol', async () => {
       const server = createMcpServer(createStaticCredentials('test-token'));
       const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
