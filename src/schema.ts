@@ -22,6 +22,30 @@ export function simplifySchemaForOpenAI(schema: any): any {
         simplified = { ...simplified, ...merged };
     }
 
+    // A union whose options are all objects (a form action, a file given by URL or as base64)
+    // becomes one object with every option's properties, so clients see them all; keeping only
+    // the first option hid the rest. Arguments are still validated against the tool definition.
+    for (const key of ['oneOf', 'anyOf']) {
+        const options = simplified[key];
+        if (Array.isArray(options) && options.length > 1 && options.every(isObjectSchema)) {
+            const description = simplified.description
+                || options.find((option: any) => option.description)?.description;
+            const properties: Record<string, any> = {};
+            for (const option of options) {
+                for (const [name, property] of Object.entries(option.properties ?? {})) {
+                    if (!(name in properties)) properties[name] = property;
+                }
+            }
+            delete simplified[key];
+            simplified = {
+                ...simplified,
+                type: 'object',
+                properties,
+                description: `${description ? description + ' ' : ''}(One of several shapes: set the properties of only one of them.)`,
+            };
+        }
+    }
+
     // Handle oneOf/anyOf - use the first option
     if (simplified.oneOf && Array.isArray(simplified.oneOf)) {
         const firstOption = simplifySchemaForOpenAI(simplified.oneOf[0]);
@@ -107,4 +131,8 @@ export function simplifySchemaForOpenAI(schema: any): any {
     delete simplified.format; // OpenAI doesn't like custom formats
 
     return simplified;
+}
+
+function isObjectSchema(schema: any): boolean {
+    return !!schema && typeof schema === 'object' && (schema.type === 'object' || (!schema.type && !!schema.properties));
 }
