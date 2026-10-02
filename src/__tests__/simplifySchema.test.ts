@@ -578,6 +578,43 @@ describe('unions of objects', () => {
     expect(result.properties.name.description).toBe('first');
   });
 
+  /**
+   * A form action's meaning lives on its option ("Posts the submitted answers as JSON…"), so merging
+   * the options must not leave it behind.
+   */
+  it('moves each option\'s description onto the one property it introduces', () => {
+    const result = simplifySchemaForOpenAI({
+      anyOf: [
+        { type: 'object', description: 'Stores it.', properties: { store_document: { type: 'boolean' } } },
+        { type: 'object', description: 'Posts the answers.', properties: { send_document: { type: 'object', properties: { url: { type: 'string' } } } } },
+      ],
+    });
+
+    expect(result.properties.store_document.description).toBe('Stores it.');
+    expect(result.properties.send_document.description).toBe('Posts the answers.');
+  });
+
+  it('never replaces a property\'s own description, nor spreads one over several properties', () => {
+    const result = simplifySchemaForOpenAI({
+      oneOf: [
+        { type: 'object', description: 'By URL.', properties: { file_url: { type: 'string' }, name: { type: 'string' } } },
+        { type: 'object', description: 'By content.', properties: { file_base64: { type: 'string', description: 'Base64 content' }, name: { type: 'string' } } },
+      ],
+    });
+
+    expect(result.properties.file_url.description).toBeUndefined();
+    expect(result.properties.name.description).toBeUndefined();
+    expect(result.properties.file_base64.description).toBe('Base64 content');
+  });
+
+  it('tells clients that the send action posts the answers', () => {
+    const served = simplifySchemaForOpenAI(toolDefinitionMap.get('create_form')!.inputSchema);
+    const send = served.properties.requestBody.properties.actions.items.properties.send_document;
+
+    expect(send.description).toMatch(/^Posts the submitted answers as JSON/);
+    expect(send.properties.url.description).toMatch(/receives the submitted answers as JSON/);
+  });
+
   it.each(['create_form', 'update_form'])('lets %s describe every form action', (toolName) => {
     const served = simplifySchemaForOpenAI(toolDefinitionMap.get(toolName)!.inputSchema);
 

@@ -32,8 +32,14 @@ export function simplifySchemaForOpenAI(schema: any): any {
                 || options.find((option: any) => option.description)?.description;
             const properties: Record<string, any> = {};
             for (const option of options) {
+                const introduced = Object.keys(option.properties ?? {}).filter((name) => !(name in properties));
                 for (const [name, property] of Object.entries(option.properties ?? {})) {
                     if (!(name in properties)) properties[name] = property;
+                }
+                // An option's description says what its one property means ("Posts the submitted
+                // answers as JSON…"); merged, it would otherwise be lost.
+                if (introduced.length === 1 && option.description && !properties[introduced[0]]?.description) {
+                    properties[introduced[0]] = { ...properties[introduced[0]], description: option.description };
                 }
             }
             delete simplified[key];
