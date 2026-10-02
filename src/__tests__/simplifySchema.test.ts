@@ -563,7 +563,7 @@ describe('unions of objects', () => {
     expect(result.type).toBe('object');
     expect(Object.keys(result.properties)).toEqual(['store_document', 'send_document']);
     expect(result.properties.send_document.properties.url.type).toBe('string');
-    expect(result.description).toContain('One action.');
+    expect(result.properties.store_document.description).toBe('One action.');
   });
 
   it('keeps the first definition of a property two options share', () => {
@@ -605,6 +605,26 @@ describe('unions of objects', () => {
     expect(result.properties.file_url.description).toBeUndefined();
     expect(result.properties.name.description).toBeUndefined();
     expect(result.properties.file_base64.description).toBe('Base64 content');
+  });
+
+  it('does not label the merged object with a description that moved onto its property', () => {
+    const result = simplifySchemaForOpenAI({
+      anyOf: [
+        { type: 'object', description: 'Stores it.', properties: { store_document: { type: 'boolean' } } },
+        { type: 'object', description: 'Posts the answers.', properties: { send_document: { type: 'object' } } },
+      ],
+    });
+
+    expect(result.description).not.toContain('Stores it.');
+  });
+
+  it('tells clients what storing and downloading the document do', () => {
+    const served = simplifySchemaForOpenAI(toolDefinitionMap.get('create_form')!.inputSchema);
+    const actions = served.properties.requestBody.properties.actions.items;
+
+    expect(actions.properties.store_document.description).toBe('Saves the generated document to Document Storage.');
+    expect(actions.properties.download_document.description).toBe('Lets the person who fills in the form download the generated document.');
+    expect(actions.description).not.toContain('Key-value pair of action configuration.');
   });
 
   it('tells clients that the send action posts the answers', () => {

@@ -28,9 +28,8 @@ export function simplifySchemaForOpenAI(schema: any): any {
     for (const key of ['oneOf', 'anyOf']) {
         const options = simplified[key];
         if (Array.isArray(options) && options.length > 1 && options.every(isObjectSchema)) {
-            const description = simplified.description
-                || options.find((option: any) => option.description)?.description;
             const properties: Record<string, any> = {};
+            const unplaced: string[] = [];
             for (const option of options) {
                 const introduced = Object.keys(option.properties ?? {}).filter((name) => !(name in properties));
                 for (const [name, property] of Object.entries(option.properties ?? {})) {
@@ -40,8 +39,11 @@ export function simplifySchemaForOpenAI(schema: any): any {
                 // answers as JSON…"); merged, it would otherwise be lost.
                 if (introduced.length === 1 && option.description && !properties[introduced[0]]?.description) {
                     properties[introduced[0]] = { ...properties[introduced[0]], description: option.description };
+                } else if (option.description) {
+                    unplaced.push(option.description);
                 }
             }
+            const description = simplified.description || unplaced[0];
             delete simplified[key];
             simplified = {
                 ...simplified,
