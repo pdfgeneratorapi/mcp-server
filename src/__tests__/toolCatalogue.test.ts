@@ -1,7 +1,7 @@
 /**
  * The tools are generated from the API spec and then edited by hand; this keeps them from drifting
  * from it again: every spec operation has one tool, with the same parameters and body fields.
- * docs/apiv4.json is a copy of the API's spec (docs/apiv4.yaml in the api repository).
+ * docs/apiv4.json is a copy of docs/apiv4.json in the api repository, generated there from apiv4.yaml.
  */
 import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
