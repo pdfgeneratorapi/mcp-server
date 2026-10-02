@@ -302,7 +302,7 @@ function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTyp
         return z.object({}).passthrough(); 
     }
     try {
-        const zodSchemaString = jsonSchemaToZod(jsonSchema);
+        const zodSchemaString = jsonSchemaToZod(allowUnnamedProperties(jsonSchema));
         // Use Function constructor instead of eval() to restrict scope.
         // Only `z` (zod) is available — no access to process, require, globals, etc.
         const zodSchema = new Function('z', `"use strict"; return (${zodSchemaString});`)(z);
@@ -314,4 +314,29 @@ function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTyp
         log.warn(`Failed to generate/evaluate Zod schema for '${toolName}':`, err);
         return z.object({}).passthrough();
     }
+}
+
+/**
+ * Zod drops the keys an object schema does not name, and a union of objects keeps the first
+ * option that matches: a form action { send_document: ... } matched { store_document } and reached
+ * the API empty. Leaving every object open keeps validation of the named keys and drops nothing.
+ */
+function allowUnnamedProperties(schema: any): any {
+    if (Array.isArray(schema)) {
+        return schema.map(allowUnnamedProperties);
+    }
+
+    if (!schema || typeof schema !== 'object') {
+        return schema;
+    }
+
+    const opened: any = Object.fromEntries(
+        Object.entries(schema).map(([key, value]) => [key, allowUnnamedProperties(value)]),
+    );
+
+    if ((opened.type === 'object' || opened.properties) && opened.additionalProperties === undefined) {
+        opened.additionalProperties = true;
+    }
+
+    return opened;
 }

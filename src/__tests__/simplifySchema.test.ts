@@ -545,3 +545,53 @@ describe('tool schemas use one type per field', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+/**
+ * Keeping only the first shape of a union hid the others from clients: a form could only store its
+ * document, and a PDF tool only took a URL.
+ */
+describe('unions of objects', () => {
+  it('serves a union of objects as one object with every option', () => {
+    const result = simplifySchemaForOpenAI({
+      anyOf: [
+        { type: 'object', description: 'One action.', properties: { store_document: { type: 'boolean' } } },
+        { type: 'object', properties: { send_document: { type: 'object', required: ['url'], properties: { url: { type: 'string' } } } } },
+      ],
+    });
+
+    expect(result.anyOf).toBeUndefined();
+    expect(result.type).toBe('object');
+    expect(Object.keys(result.properties)).toEqual(['store_document', 'send_document']);
+    expect(result.properties.send_document.properties.url.type).toBe('string');
+    expect(result.description).toContain('One action.');
+  });
+
+  it('keeps the first definition of a property two options share', () => {
+    const result = simplifySchemaForOpenAI({
+      oneOf: [
+        { type: 'object', properties: { file_url: { type: 'string' }, name: { type: 'string', description: 'first' } } },
+        { type: 'object', properties: { file_base64: { type: 'string' }, name: { type: 'string', description: 'second' } } },
+      ],
+    });
+
+    expect(Object.keys(result.properties)).toEqual(['file_url', 'name', 'file_base64']);
+    expect(result.properties.name.description).toBe('first');
+  });
+
+  it.each(['create_form', 'update_form'])('lets %s describe every form action', (toolName) => {
+    const served = simplifySchemaForOpenAI(toolDefinitionMap.get(toolName)!.inputSchema);
+
+    expect(Object.keys(served.properties.requestBody.properties.actions.items.properties)).toEqual([
+      'store_document', 'download_document', 'send_document', 'sign_document',
+    ]);
+  });
+
+  it('lets import_form describe every form action', () => {
+    const served = simplifySchemaForOpenAI(toolDefinitionMap.get('import_form')!.inputSchema);
+
+    expect(Object.keys(served.properties.requestBody.properties.form.properties.actions.items.properties)).toEqual([
+      'store_document', 'download_document', 'send_document', 'sign_document',
+    ]);
+  });
+});
+

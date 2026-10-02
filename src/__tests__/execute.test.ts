@@ -680,3 +680,27 @@ describe('executeApiTool with nullable fields', () => {
     expect((mockAxios.mock.calls[0][0] as any).data).toMatchObject(requestBody);
   });
 });
+
+/**
+ * A form action is an object with one key, and validation used to keep only the keys of the first
+ * action shape, so every action but storing the document reached the API empty.
+ */
+describe('executeApiTool with form actions', () => {
+  const actions = [
+    { store_document: true },
+    { download_document: true },
+    { sign_document: true },
+    { send_document: { url: 'https://hooks.example.test/form', headers: [{ name: 'Authorization', value: 'Bearer abc' }] } },
+  ];
+
+  it.each(['create_form', 'update_form'])('sends every action of %s as given', async (toolName) => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: { response: {} } });
+    const args = { ...(toolName === 'update_form' ? { formId: 7 } : {}), requestBody: { name: 'Contact', template_id: 57782, actions } };
+
+    const result = await executeApiTool(toolName, toolDefinitionMap.get(toolName)!, args);
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data.actions).toEqual(actions);
+  });
+});
+
