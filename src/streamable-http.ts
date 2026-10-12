@@ -25,6 +25,7 @@ import { identityKey, limitRequests, loadRateLimits, RateLimiter, tooManyRequest
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { loadScopeEnforcement, mayCallTool } from './auth/scopes.js';
 import { challenges } from './auth/challenges.js';
+import { clientInfoOf, describeRequest, logRequests, logToolCall, type RequestFacts } from './telemetry.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
@@ -129,16 +130,19 @@ class MCPStreamableHttpServer {
   async handlePostRequest(c: any) {
     const sessionId = c.req.header(SESSION_ID_HEADER_NAME);
     const authInfo = c.get('authInfo');
+    const facts: RequestFacts = c.get('telemetry') ?? {};
     log.debug(`POST request received ${sessionId ? 'with session ID: ' + sessionId : 'without session ID'}`);
 
     try {
       // Read the body from a copy: the transport needs the request untouched
       const body = await c.req.raw.clone().json();
+      Object.assign(facts, describeRequest(body));
       const refusal = this.scopeRefusal(body, authInfo);
 
       // A single call can be answered with the step-up challenge a client can act on;
       // a batch cannot, so its elements are refused one by one by the tool handler.
       if (refusal) {
+        facts.refusal = 'insufficient_scope';
         return c.json(refusal.body, refusal.status, { 'WWW-Authenticate': refusal.wwwAuthenticate });
       }
 
@@ -151,16 +155,27 @@ class MCPStreamableHttpServer {
         }
 
         this.sessions.touch(sessionId);
+        facts.client = session.client;
+        facts.deferred = facts.method === 'tools/call';
 
-        return await session.transport.handleRequest(c.req.raw, { authInfo });
+        const response = await session.transport.handleRequest(c.req.raw, { authInfo });
+
+        // Refused by the transport, so the tool handler never saw it
+        if (response.status >= 400) {
+          facts.deferred = false;
+        }
+
+        return response;
       }
 
       // Create new transport for initialize requests
       if (this.isInitializeRequest(body)) {
         const owner = ownerOf(this.issuer, authInfo);
+        facts.client = clientInfoOf(body);
 
         if (!owner) {
           log.error('Refusing a session: the verified token names no subject or client');
+          facts.refusal = 'no_subject';
           return c.json(this.createErrorResponse('Unauthorized: the access token names no subject.'), 401);
         }
 
@@ -168,11 +183,13 @@ class MCPStreamableHttpServer {
 
         if (!opened.allowed) {
           log.warn('Refused a new session: the client opens sessions too fast', { subject: owner.subject, client: owner.clientId });
+          facts.refusal = 'session_rate_limited';
           return tooManyRequests(c, opened.retryAfterSeconds, 'session limit reached');
         }
 
         if (this.sessions.size() >= this.maxSessions) {
           log.warn(`Refused a new session: at capacity (${this.maxSessions})`);
+          facts.refusal = 'session_capacity';
           return c.json(
             this.createErrorResponse('Service Unavailable: session capacity reached.'),
             503,
@@ -196,7 +213,9 @@ class MCPStreamableHttpServer {
 
         // Each tool call resolves its API credential from the verified token of that
         // request, never from the header
-        const newServer = createMcpServer(this.credentials);
+        const newServer = createMcpServer(this.credentials, (record, extra) => {
+          logToolCall(record, extra.authInfo, this.sessions.get(extra.sessionId ?? '')?.client);
+        });
         await newServer.connect(transport);
 
         const response = await transport.handleRequest(c.req.raw, { authInfo });
@@ -204,7 +223,7 @@ class MCPStreamableHttpServer {
 
         if (newSessionId) {
           log.debug(`New session established: ${newSessionId}`);
-          this.sessions.add(newSessionId, { transport, server: newServer, owner, lastActivity: Date.now() });
+          this.sessions.add(newSessionId, { transport, server: newServer, owner, lastActivity: Date.now(), client: facts.client });
         }
 
         return response;
@@ -329,6 +348,7 @@ export function createHttpApp(
   app.all('/.well-known/*', (c) => c.json({ error: 'not_found' }, 404));
 
   // Main MCP endpoint supporting both GET and POST
+  app.use('/mcp', logRequests());
   app.use('/mcp', guardRequests(limits));
   app.use('/mcp', requireBearerToken(authConfig, verifier));
   app.use('/mcp', limitRequests(new RateLimiter(rateLimits.requestsPerMinute), authConfig.issuer));
