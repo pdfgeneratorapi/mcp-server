@@ -9,4 +9,8 @@ export const log = {
   info:  (...args: unknown[]) => { console.error(...args); },
   warn:  (...args: unknown[]) => { console.error(...args); },
   error: (...args: unknown[]) => { console.error(...args); },
+  /** One JSON line, so log queries can filter on any context field. */
+  event: (message: string, context: Record<string, unknown>) => {
+    console.error(JSON.stringify({ level: 'info', message, context }));
+  },
 };
