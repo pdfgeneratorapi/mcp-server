@@ -43,13 +43,15 @@ function isForbiddenHeader(name: string): boolean {
  * @param definition Tool definition
  * @param toolArgs Arguments provided by the user
  * @param upstreamAuth Credentials for the API; without it the request is unauthenticated
+ * @param onUpstreamStatus Told the HTTP status of the API's answer, when there is one
  * @returns Call tool result
  */
 export async function executeApiTool(
     toolName: string,
     definition: McpToolDefinition,
     toolArgs: JsonObject,
-    upstreamAuth?: UpstreamAuth
+    upstreamAuth?: UpstreamAuth,
+    onUpstreamStatus?: (status: number) => void
 ): Promise<CallToolResult> {
   try {
     // Validate arguments against the input schema
@@ -136,15 +138,20 @@ export async function executeApiTool(
         response = await axios(await authenticated(config, upstreamAuth));
     }
 
+    onUpstreamStatus?.(response.status);
+
     return formatResponse(response.status, response.headers as Record<string, unknown>, response.data);
 
   } catch (error: unknown) {
     // Handle errors during execution
     let errorMessage: string;
-    
+
     // Format Axios errors specially
-    if (axios.isAxiosError(error)) { 
-        errorMessage = formatApiError(error); 
+    if (axios.isAxiosError(error)) {
+        if (error.response) {
+            onUpstreamStatus?.(error.response.status);
+        }
+        errorMessage = formatApiError(error);
     }
     // Handle standard errors
     else if (error instanceof Error) { 

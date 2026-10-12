@@ -16,6 +16,11 @@ import { toolDefinitionMap } from './tools.js';
 import { executeApiTool } from './execute.js';
 import type { UpstreamCredentials } from './credentials/upstream.js';
 import { loadScopeEnforcement, mayCallTool, visibleTools } from './auth/scopes.js';
+import { elapsedSince, type ToolCallRecord } from './telemetry.js';
+import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+
+/** Told how each tool call went, once it has an outcome. */
+export type ToolCallObserver = (record: ToolCallRecord, extra: { authInfo?: AuthInfo; sessionId?: string }) => void;
 
 /**
  * Tool annotations — hints for MCP clients about tool behavior
@@ -115,8 +120,9 @@ const prompts = [
  * Factory function to create new MCP Server instances
  * Each connection needs its own server instance
  * @param credentials Credentials for the API, resolved per call from the verified access token
+ * @param onToolCall Told how each tool call went
  */
-export function createMcpServer(credentials?: UpstreamCredentials): Server {
+export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: ToolCallObserver): Server {
     const server = new Server(
         {
             name: SERVER_NAME,
@@ -148,10 +154,14 @@ export function createMcpServer(credentials?: UpstreamCredentials): Server {
     });
 
     server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest, extra): Promise<CallToolResult> => {
+        const startedAt = performance.now();
         const { name: toolName, arguments: toolArgs } = request.params;
+        const observe = (details: Omit<ToolCallRecord, 'tool' | 'durationMs'>) =>
+            onToolCall?.({ tool: toolName, durationMs: elapsedSince(startedAt), ...details }, extra);
         const toolDefinition = toolDefinitionMap.get(toolName);
         if (!toolDefinition) {
             log.warn(`Unknown tool requested: ${toolName}`);
+            observe({ outcome: 'refused', refusal: 'unknown_tool' });
             return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }], isError: true };
         }
         const enforcement = loadScopeEnforcement();
@@ -161,6 +171,7 @@ export function createMcpServer(credentials?: UpstreamCredentials): Server {
             log.warn(`Tool "${toolName}" needs scope "${decision.required}", which this token does not grant`);
 
             if (enforcement === 'enforce') {
+                observe({ outcome: 'refused', refusal: 'insufficient_scope' });
                 return {
                     content: [{ type: "text", text: `Error: this connection is not allowed to call "${toolName}". It needs the "${decision.required}" permission; reconnect and grant it.` }],
                     isError: true,
@@ -172,7 +183,13 @@ export function createMcpServer(credentials?: UpstreamCredentials): Server {
             getToken: () => credentials.get(extra.authInfo),
             invalidate: () => credentials.invalidate(extra.authInfo),
         };
-        return await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, upstreamAuth);
+        let upstreamStatus: number | undefined;
+        const result = await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, upstreamAuth, (status) => {
+            upstreamStatus = status;
+        });
+        observe({ outcome: result.isError ? 'error' : 'ok', upstreamStatus });
+
+        return result;
     });
 
     server.setRequestHandler(ListPromptsRequestSchema, async () => {

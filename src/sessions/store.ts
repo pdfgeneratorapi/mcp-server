@@ -4,6 +4,7 @@
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import type { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { ClientInfo } from '../telemetry.js';
 
 /** Who a session belongs to. Never the token itself, so a refreshed token keeps working. */
 export interface SessionOwner {
@@ -19,6 +20,8 @@ export interface Session {
   server: Server;
   owner: SessionOwner;
   lastActivity: number;
+  /** What the client said about itself on initialize. */
+  client?: ClientInfo;
 }
 
 export interface SessionStore {
