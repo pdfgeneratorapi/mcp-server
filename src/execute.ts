@@ -13,13 +13,15 @@ import { log } from './logger.js';
  * @param definition Tool definition
  * @param toolArgs Arguments provided by the user
  * @param bearerToken Optional bearer token for JWT authentication
+ * @param onUpstreamStatus Told the HTTP status of the API's answer, when there is one
  * @returns Call tool result
  */
 export async function executeApiTool(
     toolName: string,
     definition: McpToolDefinition,
     toolArgs: JsonObject,
-    bearerToken?: string
+    bearerToken?: string,
+    onUpstreamStatus?: (status: number) => void
 ): Promise<CallToolResult> {
   try {
     // Validate arguments against the input schema
@@ -95,6 +97,7 @@ export async function executeApiTool(
     
     // Execute the request
     const response = await axios(config);
+    onUpstreamStatus?.(response.status);
 
     // Process and format the response
     let responseText = '';
@@ -136,8 +139,11 @@ export async function executeApiTool(
     let errorMessage: string;
     
     // Format Axios errors specially
-    if (axios.isAxiosError(error)) { 
-        errorMessage = formatApiError(error); 
+    if (axios.isAxiosError(error)) {
+        if (error.response) {
+            onUpstreamStatus?.(error.response.status);
+        }
+        errorMessage = formatApiError(error);
     }
     // Handle standard errors
     else if (error instanceof Error) { 

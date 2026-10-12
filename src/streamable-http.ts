@@ -15,6 +15,16 @@ import { toReqRes, toFetchResponse } from 'fetch-to-node';
 import { SERVER_NAME, SERVER_VERSION } from './config.js';
 import { createMcpServer } from './server.js';
 import { log } from './logger.js';
+import {
+  bearerTokenOf,
+  clientInfoOf,
+  describeRequest,
+  identityOf,
+  logRequests,
+  logToolCall,
+  type ClientInfo,
+  type RequestFacts,
+} from './telemetry.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
@@ -31,6 +41,8 @@ class MCPStreamableHttpServer {
   servers: {[sessionId: string]: Server} = {};
   // Store authorization tokens per session
   sessionTokens: {[sessionId: string]: string} = {};
+  // What each session's client said about itself on initialize
+  clients: {[sessionId: string]: ClientInfo} = {};
   // Track last activity per session for TTL expiration
   private lastActivity: {[sessionId: string]: number} = {};
   private cleanupTimer: ReturnType<typeof setInterval>;
@@ -63,6 +75,7 @@ class MCPStreamableHttpServer {
     delete this.transports[sessionId];
     delete this.servers[sessionId];
     delete this.sessionTokens[sessionId];
+    delete this.clients[sessionId];
     delete this.lastActivity[sessionId];
   }
   
@@ -82,29 +95,41 @@ class MCPStreamableHttpServer {
   async handlePostRequest(c: any) {
     const sessionId = c.req.header(SESSION_ID_HEADER_NAME);
     const authHeader = c.req.header('Authorization');
+    const facts: RequestFacts = c.get('telemetry') ?? {};
     log.debug(`POST request received ${sessionId ? 'with session ID: ' + sessionId : 'without session ID'}`);
 
     try {
       const body = await c.req.json();
-      
+      Object.assign(facts, describeRequest(body));
+
       // Convert Fetch Request to Node.js req/res
       const { req, res } = toReqRes(c.req.raw);
-      
+
       // Reuse existing transport if we have a session ID
       if (sessionId && this.transports[sessionId]) {
         this.lastActivity[sessionId] = Date.now();
         const transport = this.transports[sessionId];
-        
+        facts.identity = identityOf(this.sessionTokens[sessionId]);
+        facts.client = this.clients[sessionId];
+        facts.deferred = facts.method === 'tools/call';
+
         // Handle the request with the transport
         await transport.handleRequest(req, res, body);
-        
+
         // Cleanup when the response ends
         res.on('close', () => {
           log.debug(`Request closed for session ${sessionId}`);
         });
-        
+
         // Convert Node.js response back to Fetch Response
-        return toFetchResponse(res);
+        const response = await toFetchResponse(res);
+
+        // Refused by the transport, so the tool handler never saw it
+        if (response.status >= 400) {
+          facts.deferred = false;
+        }
+
+        return response;
       }
       
       // Create new transport for initialize requests
@@ -121,14 +146,18 @@ class MCPStreamableHttpServer {
         };
 
         // Extract Bearer token from Authorization header
-        let bearerToken: string | undefined;
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-          bearerToken = authHeader.substring(7);
+        const bearerToken = bearerTokenOf(authHeader);
+        if (bearerToken) {
           log.debug('Bearer token provided via Authorization header');
         }
+        const identity = identityOf(bearerToken);
+        facts.identity = identity;
+        facts.client = clientInfoOf(body);
 
         // Create a new MCP server instance for this session
-        const newServer = createMcpServer(bearerToken);
+        const newServer = createMcpServer(bearerToken, (record, extra) => {
+          logToolCall(record, identity, this.clients[extra.sessionId ?? '']);
+        });
 
         // Connect the transport to the new MCP server
         await newServer.connect(transport);
@@ -146,6 +175,7 @@ class MCPStreamableHttpServer {
           if (bearerToken) {
             this.sessionTokens[newSessionId] = bearerToken;
           }
+          this.clients[newSessionId] = facts.client;
 
           // Set up clean-up for when the transport is closed
           transport.onclose = () => {
@@ -163,6 +193,10 @@ class MCPStreamableHttpServer {
         return toFetchResponse(res);
       }
       
+      if (sessionId) {
+        facts.refusal = 'unknown_session';
+      }
+
       // Invalid request (no session ID and not initialize)
       return c.json(
         this.createErrorResponse("Bad Request: invalid session ID or method."),
@@ -234,6 +268,7 @@ export async function setupStreamableHttpServer(port = 3000) {
   });
   
   // Main MCP endpoint supporting both GET and POST
+  app.use('/mcp', logRequests());
   app.get("/mcp", (c) => mcpHandler.handleGetRequest(c));
   app.post("/mcp", (c) => mcpHandler.handlePostRequest(c));
   

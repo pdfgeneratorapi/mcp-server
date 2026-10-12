@@ -13,6 +13,10 @@ import { log } from './logger.js';
 import { simplifySchemaForOpenAI } from './schema.js';
 import { toolDefinitionMap } from './tools.js';
 import { executeApiTool } from './execute.js';
+import { elapsedSince, type ToolCallRecord } from './telemetry.js';
+
+/** Told how each tool call went, once it has an outcome. */
+export type ToolCallObserver = (record: ToolCallRecord, extra: { sessionId?: string }) => void;
 
 /**
  * Tool annotations — hints for MCP clients about tool behavior
@@ -102,8 +106,9 @@ const prompts = [
  * Factory function to create new MCP Server instances
  * Each connection needs its own server instance
  * @param bearerToken Optional bearer token for authentication (required for API calls)
+ * @param onToolCall Told how each tool call went
  */
-export function createMcpServer(bearerToken?: string): Server {
+export function createMcpServer(bearerToken?: string, onToolCall?: ToolCallObserver): Server {
     const server = new Server(
         {
             name: SERVER_NAME,
@@ -129,14 +134,24 @@ export function createMcpServer(bearerToken?: string): Server {
         return { tools: toolsForClient };
     });
 
-    server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest): Promise<CallToolResult> => {
+    server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest, extra): Promise<CallToolResult> => {
+        const startedAt = performance.now();
         const { name: toolName, arguments: toolArgs } = request.params;
+        const observe = (details: Omit<ToolCallRecord, 'tool' | 'durationMs'>) =>
+            onToolCall?.({ tool: toolName, durationMs: elapsedSince(startedAt), ...details }, extra);
         const toolDefinition = toolDefinitionMap.get(toolName);
         if (!toolDefinition) {
             log.warn(`Unknown tool requested: ${toolName}`);
+            observe({ outcome: 'refused', refusal: 'unknown_tool' });
             return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }], isError: true };
         }
-        return await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, bearerToken);
+        let upstreamStatus: number | undefined;
+        const result = await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, bearerToken, (status) => {
+            upstreamStatus = status;
+        });
+        observe({ outcome: result.isError ? 'error' : 'ok', upstreamStatus });
+
+        return result;
     });
 
     server.setRequestHandler(ListPromptsRequestSchema, async () => {
