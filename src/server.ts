@@ -12,7 +12,7 @@ import { SERVER_NAME, SERVER_VERSION } from './config.js';
 import { SERVER_ICON } from './icon.js';
 import { log } from './logger.js';
 import { simplifySchemaForOpenAI } from './schema.js';
-import { toolDefinitionMap } from './tools.js';
+import { catalogue } from './catalogue.js';
 import { executeApiTool } from './execute.js';
 import type { UpstreamCredentials } from './credentials/upstream.js';
 import { loadScopeEnforcement, mayCallTool, visibleTools } from './auth/scopes.js';
@@ -85,6 +85,10 @@ const toolAnnotations: Record<string, { title: string; readOnlyHint?: boolean; d
     convert_pdf_to_image:                { title: "Convert PDF to Images",              readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     get_template_library:                { title: "List Library Templates",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     get_template_library_item:           { title: "Get Library Template",               readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_builder_guide:                   { title: "Get Template Builder Guide",         readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    list_builder_tools:                  { title: "List Template Builder Tools",        readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    // Changes are saved as template versions, so a removed component can be restored.
+    run_builder_tool:                    { title: "Run Template Builder Tool",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
 };
 
 /**
@@ -134,7 +138,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         },
         {
             capabilities: { tools: {}, prompts: {} },
-            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with get_templates, then generate documents with generate_document. Authentication is handled via JWT bearer token.",
+            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with get_templates, then generate documents with generate_document. To build or restyle a template step by step, read get_builder_guide, list the steps with list_builder_tools and apply them with run_builder_tool. Authentication is handled via JWT bearer token.",
         }
     );
 
@@ -142,7 +146,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         const enforcement = loadScopeEnforcement();
         const scopes = extra.authInfo?.scopes ?? [];
         const allowed = enforcement === 'off' ? null : new Set(visibleTools(scopes));
-        const toolsForClient: Tool[] = Array.from(toolDefinitionMap.values())
+        const toolsForClient: Tool[] = Array.from(catalogue.values())
             .filter(def => allowed === null || allowed.has(def.name))
             .map(def => ({
             name: def.name,
@@ -158,14 +162,14 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         const { name: toolName, arguments: toolArgs } = request.params;
         const observe = (details: Omit<ToolCallRecord, 'tool' | 'durationMs'>) =>
             onToolCall?.({ tool: toolName, durationMs: elapsedSince(startedAt), ...details }, extra);
-        const toolDefinition = toolDefinitionMap.get(toolName);
+        const toolDefinition = catalogue.get(toolName);
         if (!toolDefinition) {
             log.warn(`Unknown tool requested: ${toolName}`);
             observe({ outcome: 'refused', refusal: 'unknown_tool' });
             return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }], isError: true };
         }
         const enforcement = loadScopeEnforcement();
-        const decision = mayCallTool(toolName, extra.authInfo?.scopes ?? []);
+        const decision = mayCallTool(toolName, extra.authInfo?.scopes ?? [], toolArgs ?? {});
 
         if (!decision.allowed && enforcement !== 'off') {
             log.warn(`Tool "${toolName}" needs scope "${decision.required}", which this token does not grant`);

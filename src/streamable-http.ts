@@ -251,13 +251,13 @@ class MCPStreamableHttpServer {
       return null;
     }
 
-    const request = body as { method?: string; params?: { name?: string } };
+    const request = body as { method?: string; params?: { name?: string; arguments?: Record<string, unknown> } };
 
     if (request?.method !== 'tools/call' || typeof request.params?.name !== 'string') {
       return null;
     }
 
-    const decision = mayCallTool(request.params.name, authInfo?.scopes ?? []);
+    const decision = mayCallTool(request.params.name, authInfo?.scopes ?? [], request.params.arguments ?? {});
 
     if (decision.allowed || decision.required === null) {
       return null;
