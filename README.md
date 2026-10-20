@@ -42,7 +42,7 @@ In `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
 
 ### VS Code
 
-In `.vscode/mcp.json`:
+Run **MCP: Add Server** from the Command Palette and choose HTTP, or add the server to `mcp.json` (**MCP: Open User Configuration** for every workspace, `.vscode/mcp.json` for one):
 
 ```json
 {
@@ -54,6 +54,8 @@ In `.vscode/mcp.json`:
   }
 }
 ```
+
+Start the server from `mcp.json` or **MCP: List Servers** to sign in. Its tools are used from Copilot Chat in **Agent** mode, with a signed-in GitHub Copilot account.
 
 ### Clients that only start local servers
 
@@ -69,6 +71,8 @@ A client that can only run local (stdio) servers connects through the [`mcp-remo
   }
 }
 ```
+
+How each client was tested, and what to do when one misbehaves: [client compatibility](docs/clients.md).
 
 ## Signing in and permissions
 
