@@ -6,8 +6,14 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { v4 as uuid } from 'uuid';
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
-import { isInitializeRequest, type JSONRPCErrorResponse } from "@modelcontextprotocol/server";
+import {
+  WebStandardStreamableHTTPServerTransport,
+  createMcpHandler,
+  isInitializeRequest,
+  isLegacyRequest,
+  type JSONRPCErrorResponse,
+  type McpHttpHandler,
+} from "@modelcontextprotocol/server";
 
 // Import server configuration constants and factory
 import { SERVER_NAME, SERVER_VERSION } from './config.js';
@@ -25,7 +31,7 @@ import { identityKey, limitRequests, loadRateLimits, RateLimiter, tooManyRequest
 import type { AuthInfo } from '@modelcontextprotocol/server';
 import { loadScopeEnforcement, mayCallTool } from './auth/scopes.js';
 import { challenges } from './auth/challenges.js';
-import { clientInfoOf, describeRequest, logRequests, logToolCall, type RequestFacts } from './telemetry.js';
+import { clientInfoOf, describeRequest, envelopeClientOf, logRequests, logToolCall, type RequestFacts } from './telemetry.js';
 
 // Constants
 const SESSION_ID_HEADER_NAME = "mcp-session-id";
@@ -41,6 +47,9 @@ const METADATA_CACHE_CONTROL = 'public, max-age=3600';
  */
 class MCPStreamableHttpServer {
   private cleanupTimer: ReturnType<typeof setInterval>;
+  private readonly modern: McpHttpHandler;
+  /** The telemetry of each 2026-07-28 request, for the tool handler of the server built for it. */
+  private readonly modernFacts = new WeakMap<Request, RequestFacts>();
 
   constructor(
     private readonly credentials: UpstreamCredentials,
@@ -52,6 +61,22 @@ class MCPStreamableHttpServer {
   ) {
     this.cleanupTimer = setInterval(() => this.cleanupStaleSessions(), SESSION_CLEANUP_INTERVAL_MS);
     this.cleanupTimer.unref();
+
+    // 2026-07-28 requests carry no session: a server is built for each one, and 2025-era
+    // traffic never reaches this handler, so it keeps its sessions below
+    this.modern = createMcpHandler(
+      ({ requestInfo }) => createMcpServer(this.credentials, (record) => {
+        const facts = requestInfo && this.modernFacts.get(requestInfo);
+
+        if (facts) {
+          facts.toolCall = record;
+        }
+      }),
+      {
+        legacy: 'reject',
+        onerror: (error) => log.warn(`MCP request rejected: ${error.message}`),
+      },
+    );
   }
 
   /**
@@ -144,6 +169,13 @@ class MCPStreamableHttpServer {
       if (refusal) {
         facts.refusal = 'insufficient_scope';
         return c.json(refusal.body, refusal.status, { 'WWW-Authenticate': refusal.wwwAuthenticate });
+      }
+
+      if (!(await isLegacyRequest(c.req.raw, body))) {
+        facts.client = envelopeClientOf(body);
+        this.modernFacts.set(c.req.raw, facts);
+
+        return await this.modern.fetch(c.req.raw, { authInfo, parsedBody: body });
       }
 
       // Reuse the session only for the identity that opened it

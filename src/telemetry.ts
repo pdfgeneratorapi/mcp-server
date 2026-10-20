@@ -4,7 +4,7 @@
  * arguments or results, which carry customer documents and data.
  */
 import type { MiddlewareHandler } from 'hono';
-import type { AuthInfo } from '@modelcontextprotocol/server';
+import { CLIENT_INFO_META_KEY, PROTOCOL_VERSION_META_KEY, type AuthInfo } from '@modelcontextprotocol/server';
 import { log } from './logger.js';
 import { RUN_BUILDER_TOOL } from './builder.js';
 
@@ -28,7 +28,7 @@ const REFUSALS: Record<number, string> = {
   503: 'unavailable',
 };
 
-/** What a client says about itself when it opens a session. */
+/** What a client says about itself: on initialize, or on every request in the 2026-07-28 revision. */
 export interface ClientInfo {
   name?: string;
   version?: string;
@@ -44,6 +44,8 @@ export interface RequestFacts {
   refusal?: string;
   /** A tools/call handed to the tool handler, which logs it once the outcome is known. */
   deferred?: boolean;
+  /** How a tools/call answered in this request went, logged on the request's own line. */
+  toolCall?: ToolCallRecord;
 }
 
 export interface ToolCallRecord {
@@ -64,6 +66,18 @@ export function clientInfoOf(initialize: unknown): ClientInfo {
     name: text(params?.clientInfo?.name),
     version: text(params?.clientInfo?.version),
     protocolVersion: text(params?.protocolVersion),
+  };
+}
+
+/** The client a 2026-07-28 request names in its `_meta` envelope. */
+export function envelopeClientOf(body: unknown): ClientInfo {
+  const meta = (body as { params?: { _meta?: Record<string, unknown> } } | null)?.params?._meta;
+  const clientInfo = meta?.[CLIENT_INFO_META_KEY] as { name?: unknown; version?: unknown } | undefined;
+
+  return {
+    name: text(clientInfo?.name),
+    version: text(clientInfo?.version),
+    protocolVersion: text(meta?.[PROTOCOL_VERSION_META_KEY]),
   };
 }
 
@@ -108,6 +122,7 @@ export function logRequests(): MiddlewareHandler {
     }
 
     const status = c.res.status;
+    const toolCall = facts.toolCall;
 
     log.event(REQUEST_MESSAGE, {
       ...identityOf(c.get('authInfo') as AuthInfo | undefined),
@@ -117,8 +132,9 @@ export function logRequests(): MiddlewareHandler {
       tool: facts.tool,
       builder_tool: facts.builderTool,
       status,
-      outcome: status >= 500 ? 'error' : status >= 400 ? 'refused' : 'ok',
-      refusal: status >= 400 ? facts.refusal ?? refusalOf(c.res) : undefined,
+      outcome: toolCall?.outcome ?? (status >= 500 ? 'error' : status >= 400 ? 'refused' : 'ok'),
+      refusal: toolCall?.refusal ?? (status >= 400 ? facts.refusal ?? refusalOf(c.res) : undefined),
+      upstream_status: toolCall?.upstreamStatus,
       duration_ms: elapsedSince(startedAt),
     });
   };
