@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from '@jest/globals';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { AuthInfo } from '@modelcontextprotocol/server';
 
 const { setupStreamableHttpServer } = await import('../streamable-http.js');
 const { loadAuthConfig } = await import('../auth/config.js');

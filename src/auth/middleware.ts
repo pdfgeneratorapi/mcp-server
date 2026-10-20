@@ -2,7 +2,7 @@
  * Hono middleware that authenticates every request to the MCP endpoint.
  */
 import type { Context, MiddlewareHandler } from 'hono';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { AuthInfo } from '@modelcontextprotocol/server';
 import { log } from '../logger.js';
 import type { AuthConfig } from './config.js';
 import { challenges, type Challenge } from './challenges.js';

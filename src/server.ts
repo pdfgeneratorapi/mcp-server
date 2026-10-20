@@ -1,13 +1,10 @@
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-  ListPromptsRequestSchema,
-  GetPromptRequestSchema,
+  Server,
   type Tool,
   type CallToolResult,
-  type CallToolRequest
-} from "@modelcontextprotocol/sdk/types.js";
+  type CallToolRequest,
+  type ServerContext
+} from "@modelcontextprotocol/server";
 import { SERVER_NAME, SERVER_VERSION } from './config.js';
 import { SERVER_ICON } from './icon.js';
 import { log } from './logger.js';
@@ -17,7 +14,7 @@ import { executeApiTool } from './execute.js';
 import type { UpstreamCredentials } from './credentials/upstream.js';
 import { loadScopeEnforcement, mayCallTool, visibleTools } from './auth/scopes.js';
 import { builderToolOf, elapsedSince, type ToolCallRecord } from './telemetry.js';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { AuthInfo } from '@modelcontextprotocol/server';
 
 /** Told how each tool call went, once it has an outcome. */
 export type ToolCallObserver = (record: ToolCallRecord, extra: { authInfo?: AuthInfo; sessionId?: string }) => void;
@@ -142,9 +139,9 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         }
     );
 
-    server.setRequestHandler(ListToolsRequestSchema, async (_request, extra) => {
+    server.setRequestHandler('tools/list', async (_request, ctx) => {
         const enforcement = loadScopeEnforcement();
-        const scopes = extra.authInfo?.scopes ?? [];
+        const scopes = ctx.http?.authInfo?.scopes ?? [];
         const allowed = enforcement === 'off' ? null : new Set(visibleTools(scopes));
         const toolsForClient: Tool[] = Array.from(catalogue.values())
             .filter(def => allowed === null || allowed.has(def.name))
@@ -157,7 +154,8 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         return { tools: toolsForClient };
     });
 
-    server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest, extra): Promise<CallToolResult> => {
+    server.setRequestHandler('tools/call', async (request: CallToolRequest, ctx: ServerContext): Promise<CallToolResult> => {
+        const extra = { authInfo: ctx.http?.authInfo, sessionId: ctx.sessionId };
         const startedAt = performance.now();
         const { name: toolName, arguments: toolArgs } = request.params;
         const builderTool = builderToolOf(toolName, toolArgs);
@@ -197,11 +195,11 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         return result;
     });
 
-    server.setRequestHandler(ListPromptsRequestSchema, async () => {
+    server.setRequestHandler('prompts/list', async () => {
         return { prompts };
     });
 
-    server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    server.setRequestHandler('prompts/get', async (request) => {
         const { name, arguments: args } = request.params;
 
         if (name === "generate-pdf") {

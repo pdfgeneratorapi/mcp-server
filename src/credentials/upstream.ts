@@ -2,7 +2,7 @@
  * Credentials for calling the PDF Generator API on a user's behalf. The client's own
  * access token is never one of them: it is issued for this server, not for the API.
  */
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { AuthInfo } from '@modelcontextprotocol/server';
 
 type Fetch = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
 

@@ -8,7 +8,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { setupStreamableHttpServer } from "./streamable-http.js";
 import { createMcpServer } from './server.js';
 import { createStaticCredentials } from './credentials/upstream.js';
@@ -52,9 +52,11 @@ async function main() {
         log.warn('No MCP_DEV_API_TOKEN set - API calls from stdio mode are unauthenticated');
       }
 
-      const stdioServer = createMcpServer(devApiToken ? createStaticCredentials(devApiToken) : undefined);
-      const transport = new StdioServerTransport();
-      await stdioServer.connect(transport);
+      // Serves a 2025-era connection (initialize) and the 2026-07-28 revision alike
+      const credentials = devApiToken ? createStaticCredentials(devApiToken) : undefined;
+      serveStdio(() => createMcpServer(credentials), {
+        onerror: (error) => log.error('stdio transport error:', error),
+      });
       log.info('MCP server running in stdio mode');
     } catch (error) {
       log.error("Error setting up stdio transport:", error);

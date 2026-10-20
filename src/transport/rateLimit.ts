@@ -4,7 +4,7 @@
  * Counters live in this process: with several replicas the limit applies per replica.
  */
 import type { Context, MiddlewareHandler } from 'hono';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { AuthInfo } from '@modelcontextprotocol/server';
 import { log } from '../logger.js';
 
 const DEFAULT_REQUESTS_PER_MINUTE = 600;

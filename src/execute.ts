@@ -1,7 +1,7 @@
 import { z, ZodError } from 'zod';
 import { jsonSchemaToZod } from 'json-schema-to-zod';
 import axios, { type AxiosRequestConfig, type AxiosError } from 'axios';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import type { CallToolResult } from '@modelcontextprotocol/server';
 import type { McpToolDefinition, JsonObject } from './types.js';
 import { API_BASE_URL } from './config.js';
 import { log } from './logger.js';

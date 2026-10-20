@@ -16,8 +16,8 @@ const { createStaticCredentials } = await import('../credentials/upstream.js');
 const { toolDefinitionMap } = await import('../tools.js');
 const { catalogue } = await import('../catalogue.js');
 const { SERVER_NAME, SERVER_VERSION } = await import('../config.js');
-const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
-const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
+const { Client } = await import('@modelcontextprotocol/client');
+const { InMemoryTransport } = await import('@modelcontextprotocol/server');
 
 describe('createMcpServer', () => {
   describe('listTools handler', () => {

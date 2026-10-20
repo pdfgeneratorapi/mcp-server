@@ -2,7 +2,7 @@
  * Verifies access tokens issued by the authorization server for this MCP server.
  */
 import { decodeJwt, decodeProtectedHeader, errors, jwtVerify, type JWTPayload, type JWTVerifyGetKey } from 'jose';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { AuthInfo } from '@modelcontextprotocol/server';
 import { log } from '../logger.js';
 import { AuthorizationServerUnavailableError, InvalidTokenError } from './errors.js';
 
