@@ -1,228 +1,180 @@
 # PDF Generator API — MCP Server
 
-Model Context Protocol (MCP) server for the [PDF Generator API](https://pdfgeneratorapi.com), generated from the OpenAPI v4 specification.
+Model Context Protocol (MCP) server for the [PDF Generator API](https://pdfgeneratorapi.com). It lets AI assistants generate PDFs from your templates, build and edit templates, manage workspaces, convert HTML and URLs to PDF, create e-invoices and run PDF tools such as watermarking, encryption and form filling.
 
-## Overview
+The server is hosted. Add its URL to your MCP client and sign in with your PDF Generator API account; there is nothing to install and no token to create.
 
-This server supports **both** stdio and HTTP transports:
-- **Stdio mode** (default): For local MCP client integration (Claude Desktop, Claude Code, Cline, etc.)
-- **HTTP mode**: For production deployment, marketplaces, and multiple clients
+```
+https://mcp.pdfgeneratorapi.com/mcp
+```
 
-## Quick Start
+## Connect
 
-### Local Development (Stdio Mode)
+### Claude (claude.ai and Claude Desktop)
 
-**Install and build**:
+Open **Settings → Connectors**, choose **Add custom connector**, paste the URL and connect. Claude opens the PDF Generator API sign-in page.
+
+### Claude Code
+
 ```bash
-npm install
-npm run build
+claude mcp add --transport http pdf-generator-api https://mcp.pdfgeneratorapi.com/mcp
 ```
 
-**MCP Client Configuration Example**:
+Then run `/mcp` in Claude Code and choose **Authenticate**.
+
+### ChatGPT
+
+Add a custom MCP connector with the URL. ChatGPT opens the PDF Generator API sign-in page when you connect.
+
+### Cursor
+
+In `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project):
+
 ```json
 {
   "mcpServers": {
     "pdf-generator-api": {
-      "command": "node",
-      "args": ["/path/to/mcp-server/build/index.js"],
-      "env": {
-        "API_BASE_URL": "https://us1.pdfgeneratorapi.com/api/v4",
-        "BEARER_TOKEN_JWT": "your-jwt-token-here"
-      }
+      "url": "https://mcp.pdfgeneratorapi.com/mcp"
     }
   }
 }
 ```
 
-**Note**: Replace `/path/to/mcp-server` with your actual path and `your-jwt-token-here` with your PDF Generator API JWT token (see [JWT Token Generation](#jwt-token-generation) below).
+### VS Code
 
-**Common config locations**:
-- **Claude Desktop**: Settings > Developer > Edit Config
-- **Claude Code (CLI)**: `~/.claude/mcp_config.json`
-- **Cline/Roo-Codeium**: `.vscode/mcp_config.json`
-- **Continue**: `~/.continue/config.json`
+In `.vscode/mcp.json`:
 
-### Remote MCP Server (Streamable HTTP)
-
-If you have a deployed MCP server (e.g. `https://mcp.example.com`), you can connect to it directly from your MCP client without running anything locally.
-
-**Claude Code** (`~/.claude/mcp_config.json`):
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "pdf-generator-api": {
-      "type": "streamable-http",
-      "url": "https://mcp.pdfgeneratorapi.com/mcp",
-      "headers": {
-        "Authorization": "Bearer your-jwt-token-here"
-      }
+      "type": "http",
+      "url": "https://mcp.pdfgeneratorapi.com/mcp"
     }
   }
 }
 ```
 
-**Claude Desktop** (`claude_desktop_config.json`):
+### Clients that only start local servers
 
-Claude Desktop does not support `streamable-http` directly. Use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) as a bridge:
+A client that can only run local (stdio) servers connects through the [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) bridge, which handles the sign-in:
+
 ```json
 {
   "mcpServers": {
     "pdf-generator-api": {
       "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp.pdfgeneratorapi.com/mcp",
-        "--header",
-        "Authorization: Bearer your-jwt-token-here"
-      ]
+      "args": ["-y", "mcp-remote", "https://mcp.pdfgeneratorapi.com/mcp"]
     }
   }
 }
 ```
 
-**Note**: For remote servers, use a long-lived JWT token (e.g. `--expiresIn 30d`) to avoid mid-session expiration. See [JWT Token Generation](#jwt-token-generation) for how to create one. Restart your MCP client after updating the config.
+## Signing in and permissions
 
-### Production Deployment (HTTP Mode)
+When a client connects, you sign in to PDF Generator API and choose:
 
-**Run locally**:
+- **The workspace** the connection works in.
+- **What it may do**, per module: templates, documents, forms and workspaces can each be None, Read only or Full; e-invoices and PDF tools are allowed or not. Full includes deleting, which the consent screen marks as permanent.
+- **How long it lasts**: 1, 7, 30 or 90 days. A connection unused for 30 days also ends.
+
+The client only sees the tools your choices allow. If it calls a tool outside them, it is asked to reconnect with the missing permission.
+
+You get an email the first time an application connects to a workspace. To see or end connections, open **Settings → Connected applications** in the PDF Generator API dashboard. Clients that support it also end their connection when you remove the server.
+
+## What it can do
+
+- **Templates**: list, read, create, update, copy, import from PDF, validate, manage versions, browse the template library and open the template editor.
+- **Template builder**: `get_builder_guide`, `list_builder_tools` and `run_builder_tool` give the assistant the granular steps the PDF Generator API editor uses to build a template (add, change, move and remove components, pages and table rows; validate). The assistant does the work with its own model, so building a template this way spends none of your workspace's AI credits.
+- **Documents**: generate PDFs (one or in batches, synchronously or asynchronously), and list, read and delete generated documents.
+- **Forms**: create, import, update, share and delete forms.
+- **Conversion and PDF tools**: HTML and URL to PDF, PDF to image, watermark, encrypt, decrypt, optimize, add accessibility tags, extract and fill PDF form fields, QR codes.
+- **E-invoices**: UBL, CII, XRechnung and Factur-X.
+- **Workspaces**: list, create and delete.
+
+It also offers three prompts: `generate-pdf`, `convert-to-pdf` and `create-einvoice`.
+
+The server speaks MCP protocol revision 2026-07-28, which needs no session, and still serves clients that open with the 2025-era `initialize` handshake.
+
+## Upgrading from 4.x
+
+Version 5 connects with OAuth only: a JWT you created yourself and passed as `BEARER_TOKEN_JWT` or in an `Authorization` header is no longer accepted. See [the migration guide](docs/migrating-from-4.x.md) and the [changelog](CHANGELOG.md).
+
+To run your own server against your own API base URL, use the 4.x line on the [`main`](https://github.com/pdfgeneratorapi/mcp-server/tree/main) branch.
+
+## Development
+
+Requires Node.js 24 or later.
+
 ```bash
 npm install
+npm run build
+npm test
+```
+
+### stdio (local development)
+
+stdio mode has no sign-in. For local development it can call the API with a fixed token you create from your workspace's API credentials ([creating a JWT](https://docs.pdfgeneratorapi.com/v4#section/Authentication/Creating-a-JWT)):
+
+```bash
+MCP_DEV_API_TOKEN="your-v4-jwt" npm run start:stdio
+```
+
+It is not a way to connect an assistant to your account; use the hosted URL for that.
+
+### HTTP
+
+```bash
+cp .env.example .env
 npm run start:http
-# Server runs on http://localhost:3000
 # MCP endpoint: http://localhost:3000/mcp
 # Health check: http://localhost:3000/health
 ```
 
-**Docker**:
+or with Docker:
+
 ```bash
 docker compose -f deploy/docker-compose.yml up -d
 # MCP endpoint: http://localhost:3001/mcp
 ```
 
-## Authentication
+HTTP mode accepts only access tokens issued by the authorization server in `OAUTH_ISSUER` for the resource in `MCP_RESOURCE_URL`, and gets its API credentials from the PDF Generator API's internal credential endpoint, so it runs as part of the PDF Generator API deployment.
 
-**Stdio Mode**: Pass the JWT token via the `BEARER_TOKEN_JWT` environment variable in your MCP client config.
-
-**HTTP Mode**: Pass the JWT token in the `Authorization` header with each request:
-```bash
-curl -X POST http://localhost:3000/mcp \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -H "Authorization: Bearer your-jwt-token-here" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"initialize",...}'
-```
-
-## JWT Token Generation
-
-You need a JWT token to authenticate with the PDF Generator API. Get your credentials from the [PDF Generator API dashboard](https://app.pdfgeneratorapi.com) under **Account Settings > API Integration**.
-
-You'll need three values:
-- **Workspace ID** (`iss` claim) — your numeric workspace identifier
-- **Workspace Identifier** (`sub` claim) — your workspace email or unique key
-- **Secret Key** — the signing key for your JWT (keep this secret)
-
-See: https://docs.pdfgeneratorapi.com/v4#section/Authentication/Creating-a-JWT
-
-### Node.js
-
-```javascript
-const jwt = require('jsonwebtoken');
-
-const token = jwt.sign(
-  {
-    iss: 'YOUR_WORKSPACE_ID',       // e.g. "12345"
-    sub: 'YOUR_WORKSPACE_IDENTIFIER' // e.g. "user@example.com"
-  },
-  'YOUR_SECRET_KEY',
-  {
-    algorithm: 'HS256',
-    expiresIn: '24h'  // Token lifetime — see notes below
-  }
-);
-
-console.log(token);
-```
-
-### Quick one-liner (npx)
-
-```bash
-npx jsonwebtoken-cli -- sign \
-  '{"iss":"YOUR_WORKSPACE_ID","sub":"YOUR_WORKSPACE_IDENTIFIER"}' \
-  'YOUR_SECRET_KEY' \
-  --algorithm HS256 \
-  --expiresIn 24h
-```
-
-### Token Expiration (TTL)
-
-Choose a TTL that matches your use case:
-
-| Use case | Recommended TTL | Why |
-|----------|----------------|-----|
-| Local MCP (stdio) | `24h` or longer | MCP sessions can be long-lived; avoids mid-session expiration |
-| Production (HTTP) | `1h` | Shorter-lived tokens reduce risk if leaked |
-| CI/CD or scripts | `5m` – `15m` | Minimal exposure window for automated tasks |
-
-The PDF Generator API validates the token on every request. If the token expires mid-session, subsequent API calls will return `401 Unauthorized` — generate a new token and restart the MCP client.
-
-### Security Best Practices
-
-- **Never commit tokens or secret keys** to version control
-- Use **environment variables** or a secrets manager to store your `BEARER_TOKEN_JWT`
-- **Rotate secret keys** periodically in the PDF Generator API dashboard
-- For HTTP mode, use **HTTPS** in production to protect tokens in transit
-
-See: [PDF Generator API Authentication Docs](https://docs.pdfgeneratorapi.com/v4#section/Authentication/Creating-a-JWT)
-
-## Environment Variables
+### Configuration
 
 | Variable | Mode | Default | Description |
 |----------|------|---------|-------------|
 | `API_BASE_URL` | Both | `https://us1.pdfgeneratorapi.com/api/v4` | PDF Generator API base URL |
-| `BEARER_TOKEN_JWT` | Stdio | — | JWT token for authentication |
+| `BUILDER_BASE_URL` | Both | derived from `API_BASE_URL` (`…/api/mcp/builder`) | Template builder endpoints |
+| `MCP_DEV_API_TOKEN` | stdio | — | Fixed API token, for local development only |
+| `LOG_LEVEL` | Both | `info` | `debug` adds per-request detail |
 | `PORT` | HTTP | `3000` | Server port |
-| `LOG_LEVEL` | Both | `info` | Logging level (`debug`, `info`, `warn`, `error`) |
-| `SESSION_TTL_MINUTES` | HTTP | `30` | Session idle timeout in minutes |
-| `CORS_ORIGIN` | HTTP | `*` (all origins) | Comma-separated allowed origins |
+| `MCP_RESOURCE_URL` | HTTP | `https://mcp.pdfgeneratorapi.com/mcp` | Canonical URL of this server; access tokens must name it as their audience |
+| `OAUTH_ISSUER` | HTTP | `https://auth.pdfgeneratorapi.com` | Authorization server that issues the access tokens (no trailing slash) |
+| `OAUTH_JWKS_URI` | HTTP | from the issuer's metadata | Signing keys of the authorization server |
+| `MCP_CREDENTIALS_URL` | HTTP | `http://pdf-api-main/internal/mcp/credentials` | Internal endpoint that issues API credentials for a verified access token |
+| `MCP_SCOPE_ENFORCEMENT` | HTTP | `warn` | `off`, `warn` (log only) or `enforce` |
+| `MCP_REQUESTS_PER_MINUTE` | HTTP | `600` | Requests one user's client may make per minute, per process; `0` turns it off |
+| `MCP_INITIALIZE_PER_MINUTE` | HTTP | `30` | 2025-era sessions one user's client may open per minute, per process; `0` turns it off |
+| `SESSION_TTL_MINUTES` | HTTP | `30` | Idle timeout of a 2025-era session |
+| `MCP_MAX_SESSIONS` | HTTP | `1000` | Open 2025-era sessions per process |
+| `MCP_MAX_BODY_BYTES` | HTTP | `1048576` | Largest request body |
+| `MCP_ALLOWED_HOSTS` | HTTP | — | Extra hosts this server answers for, besides the one in `MCP_RESOURCE_URL` |
+| `CORS_ORIGIN` | HTTP | `*` | Comma-separated allowed origins |
 
-Create a `.env` file in the repo root:
+### Regenerating the tools
+
+The API tools are generated from the OpenAPI v4 specification in `docs/apiv4.json`:
+
 ```bash
-cp .env.example .env
-```
-
-## Regenerating
-
-To regenerate after OpenAPI spec changes:
-```bash
-# Place the updated spec at docs/apiv4.json, then:
 ./scripts/generate-mcp.sh
-
-# Or specify a custom input:
+# or with another spec:
 ./scripts/generate-mcp.sh --input /path/to/apiv4.json
 ```
 
-**Note:** After regeneration, custom patches may need to be re-applied.
-
-## Testing
-
-```bash
-npm run build
-npm test
-```
-
-Test stdio mode manually:
-```bash
-BEARER_TOKEN_JWT="your-token" echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | npm run start:stdio
-```
-
-Test HTTP mode:
-```bash
-npm run start:http
-curl http://localhost:3000/health
-```
+Custom patches may need to be re-applied after regeneration.
 
 ## Resources
 
-- [MCP Documentation](https://modelcontextprotocol.io)
-- [PDF Generator API Documentation](https://docs.pdfgeneratorapi.com/v4)
-- [OpenAPI MCP Generator](https://github.com/anthropics/openapi-mcp-generator)
+- [MCP documentation](https://modelcontextprotocol.io)
+- [PDF Generator API documentation](https://docs.pdfgeneratorapi.com/v4)

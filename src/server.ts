@@ -135,7 +135,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         },
         {
             capabilities: { tools: {}, prompts: {} },
-            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with get_templates, then generate documents with generate_document. To build or restyle a template step by step, read get_builder_guide, list the steps with list_builder_tools and apply them with run_builder_tool. Authentication is handled via JWT bearer token.",
+            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with get_templates, then generate documents with generate_document. To build or restyle a template step by step, read get_builder_guide, list the steps with list_builder_tools and apply them with run_builder_tool. The connection acts in the workspace the user chose when connecting, with the permissions they granted; tools outside those permissions are not listed.",
         }
     );
 
