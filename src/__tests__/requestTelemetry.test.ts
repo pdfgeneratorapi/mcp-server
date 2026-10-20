@@ -216,6 +216,55 @@ describe('request telemetry', () => {
     })]);
   });
 
+  it('names the builder tool a run_builder_tool call ran', async () => {
+    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"response":{"status":"ok"}}') });
+    const token = 'user-7.client-1.templates~write';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 1, tool: 'add_component' });
+
+    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
+      tool: 'run_builder_tool',
+      builder_tool: 'add_component',
+      outcome: 'ok',
+      upstream_status: 200,
+    })]);
+  });
+
+  it('names the builder tool of a run_builder_tool call refused for its scope', async () => {
+    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
+    const token = 'user-7.client-1.templates~read';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 1, tool: 'remove_page' });
+
+    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
+      tool: 'run_builder_tool',
+      builder_tool: 'remove_page',
+      status: 403,
+      refusal: 'insufficient_scope',
+    })]);
+  });
+
+  /**
+   * The builder tool is an argument: a value that is not shaped like a tool name could be
+   * anything the client sent, so it is left out like every other argument.
+   */
+  it('leaves out a builder tool value that is not a tool name', async () => {
+    mockAxios.mockResolvedValue({ status: 404, headers: { 'content-type': 'application/json' }, data: Buffer.from('{}') });
+    const token = 'user-7.client-1.templates~write';
+    const argument = 'Quarterly invoice for a customer';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 1, tool: argument });
+
+    const call = requestLines().find(line => line.method === 'tools/call');
+    expect(call).toEqual(expect.objectContaining({ tool: 'run_builder_tool' }));
+    expect(call).not.toHaveProperty('builder_tool');
+    expect(output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n')).not.toContain(argument);
+  });
+
   it('logs a request without a token', async () => {
     const url = await start();
 

@@ -16,7 +16,7 @@ import { catalogue } from './catalogue.js';
 import { executeApiTool } from './execute.js';
 import type { UpstreamCredentials } from './credentials/upstream.js';
 import { loadScopeEnforcement, mayCallTool, visibleTools } from './auth/scopes.js';
-import { elapsedSince, type ToolCallRecord } from './telemetry.js';
+import { builderToolOf, elapsedSince, type ToolCallRecord } from './telemetry.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 
 /** Told how each tool call went, once it has an outcome. */
@@ -160,8 +160,9 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
     server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest, extra): Promise<CallToolResult> => {
         const startedAt = performance.now();
         const { name: toolName, arguments: toolArgs } = request.params;
-        const observe = (details: Omit<ToolCallRecord, 'tool' | 'durationMs'>) =>
-            onToolCall?.({ tool: toolName, durationMs: elapsedSince(startedAt), ...details }, extra);
+        const builderTool = builderToolOf(toolName, toolArgs);
+        const observe = (details: Omit<ToolCallRecord, 'tool' | 'builderTool' | 'durationMs'>) =>
+            onToolCall?.({ tool: toolName, builderTool, durationMs: elapsedSince(startedAt), ...details }, extra);
         const toolDefinition = catalogue.get(toolName);
         if (!toolDefinition) {
             log.warn(`Unknown tool requested: ${toolName}`);
