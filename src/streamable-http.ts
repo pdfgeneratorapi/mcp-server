@@ -156,7 +156,6 @@ class MCPStreamableHttpServer {
     const sessionId = c.req.header(SESSION_ID_HEADER_NAME);
     const authInfo = c.get('authInfo');
     const facts: RequestFacts = c.get('telemetry') ?? {};
-    log.debug(`POST request received ${sessionId ? 'with session ID: ' + sessionId : 'without session ID'}`);
 
     try {
       // Read the body from a copy: the transport needs the request untouched
@@ -174,9 +173,12 @@ class MCPStreamableHttpServer {
       if (!(await isLegacyRequest(c.req.raw, body))) {
         facts.client = envelopeClientOf(body);
         this.modernFacts.set(c.req.raw, facts);
+        log.debug(`POST ${facts.method ?? 'request'} in protocol revision ${facts.client.protocolVersion ?? 'unknown'}, no session`);
 
         return await this.modern.fetch(c.req.raw, { authInfo, parsedBody: body });
       }
+
+      log.debug(`POST request received ${sessionId ? 'with session ID: ' + sessionId : 'without session ID'}`);
 
       // Reuse the session only for the identity that opened it
       if (sessionId) {

@@ -7,6 +7,9 @@ jest.unstable_mockModule('axios', () => ({
   __esModule: true,
 }));
 
+// The logger reads its level once, on import
+process.env.LOG_LEVEL = 'debug';
+
 const { Client, StreamableHTTPClientTransport } = await import('@modelcontextprotocol/client');
 const { setupStreamableHttpServer } = await import('../streamable-http.js');
 const { loadAuthConfig } = await import('../auth/config.js');
@@ -195,6 +198,16 @@ describe('the 2026-07-28 revision', () => {
       upstream_status: 200,
     })]);
   });
+
+  it('says in the debug log that the request has no session', async () => {
+    mockAxios.mockResolvedValue(ok);
+    const url = await start();
+
+    await (await modernPost(url, 'user-1.client-1', 'tools/call', { name: 'get_status', arguments: {} })).text();
+
+    expect(output).toContain(`POST tools/call in protocol revision ${MODERN}, no session`);
+    expect(output.filter(line => line.includes('session ID'))).toEqual([]);
+  });
 });
 
 describe('2025-era clients', () => {
@@ -204,5 +217,6 @@ describe('2025-era clients', () => {
     expect(client.getProtocolEra()).toBe('legacy');
     expect(transport.sessionId).toEqual(expect.any(String));
     expect((await client.listTools()).tools.map(tool => tool.name)).toContain('get_status');
+    expect(output).toContain(`POST request received with session ID: ${transport.sessionId}`);
   });
 });
