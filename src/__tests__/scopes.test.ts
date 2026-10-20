@@ -6,7 +6,7 @@ jest.unstable_mockModule('axios', () => ({
 }));
 
 const { TOOL_SCOPES, grantedScopes, requiredScope, mayCallTool, visibleTools, loadScopeEnforcement } = await import('../auth/scopes.js');
-const { toolDefinitionMap } = await import('../tools.js');
+const { catalogue } = await import('../catalogue.js');
 
 describe('the tool-to-scope map', () => {
   /**
@@ -14,7 +14,7 @@ describe('the tool-to-scope map', () => {
    * be able to ship a tool nobody scoped.
    */
   it('covers exactly the tools the server exposes', () => {
-    expect(Object.keys(TOOL_SCOPES).sort()).toEqual([...toolDefinitionMap.keys()].sort());
+    expect(Object.keys(TOOL_SCOPES).sort()).toEqual([...catalogue.keys()].sort());
   });
 
   it.each([
@@ -106,7 +106,7 @@ describe('the visible tools', () => {
   });
 
   it('shows everything to a token without scopes', () => {
-    expect(visibleTools([]).length).toBe(toolDefinitionMap.size);
+    expect(visibleTools([]).length).toBe(catalogue.size);
   });
 });
 

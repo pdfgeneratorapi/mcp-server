@@ -71,11 +71,11 @@ async function connect(token: string) {
   return { url, sessionId };
 }
 
-function callTool(url: string, token: string, sessionId: string, name: string) {
+function callTool(url: string, token: string, sessionId: string, name: string, args: Record<string, unknown> = {}) {
   return fetch(url, {
     method: 'POST',
     headers: headers(token, sessionId),
-    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: {} } }),
+    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } }),
   });
 }
 
@@ -116,6 +116,30 @@ describe('scope enforcement over HTTP', () => {
     const { url, sessionId } = await connect(token);
 
     const response = await callTool(url, token, sessionId, 'delete_template');
+    await response.text();
+
+    expect(response.status).toBe(200);
+  });
+
+  it('asks for templates:write to run a builder tool that changes the template', async () => {
+    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
+    const token = 'user-a.client-1.templates~read';
+    const { url, sessionId } = await connect(token);
+
+    const response = await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 7, tool: 'add_component' });
+    await response.text();
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get('www-authenticate')).toContain('scope="templates:write"');
+  });
+
+  it('lets a template-read client run a builder tool that only reads', async () => {
+    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"response":[]}') });
+    const token = 'user-a.client-1.templates~read';
+    const { url, sessionId } = await connect(token);
+
+    const response = await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 7, tool: 'list_pages' });
     await response.text();
 
     expect(response.status).toBe(200);

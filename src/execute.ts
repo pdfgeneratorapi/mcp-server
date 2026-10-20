@@ -102,7 +102,8 @@ export async function executeApiTool(
     }
     
     // Construct the full URL
-    const requestUrl = API_BASE_URL ? `${API_BASE_URL}${urlPath}` : urlPath;
+    const baseUrl = definition.baseUrl ?? API_BASE_URL;
+    const requestUrl = baseUrl ? `${baseUrl}${urlPath}` : urlPath;
 
     // Handle request body if needed
     if (definition.requestBodyContentType && typeof validatedArgs['requestBody'] !== 'undefined') {

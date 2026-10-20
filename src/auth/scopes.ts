@@ -2,7 +2,8 @@
  * Least-privilege scopes over the tool catalogue: a client that only reads templates
  * cannot delete a workspace.
  */
-import { toolDefinitionMap } from '../tools.js';
+import { catalogue } from '../catalogue.js';
+import { RUN_BUILDER_TOOL, builderToolChangesTemplate } from '../builder.js';
 
 export type ScopeEnforcement = 'off' | 'warn' | 'enforce';
 
@@ -87,6 +88,12 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   create_einvoice: 'einvoice:write',
   create_xrechnung_einvoice: 'einvoice:write',
   create_facturx_einvoice: 'einvoice:write',
+
+  // The template builder. Running a builder tool that changes the template needs
+  // templates:write on top; see requiredScopeForCall.
+  get_builder_guide: 'templates:read',
+  list_builder_tools: 'templates:read',
+  run_builder_tool: 'templates:read',
 };
 
 /** Every scope a tool needs, which is what clients are told to request. */
@@ -102,6 +109,18 @@ export function loadScopeEnforcement(env: NodeJS.ProcessEnv = process.env): Scop
 
 export function requiredScope(toolName: string): string | null {
   return TOOL_SCOPES[toolName] ?? null;
+}
+
+/**
+ * The scope one call needs: a tool's own scope, except that running a builder tool which
+ * changes the template needs templates:write.
+ */
+export function requiredScopeForCall(toolName: string, args: Record<string, unknown> = {}): string | null {
+  if (toolName === RUN_BUILDER_TOOL && builderToolChangesTemplate(args.tool)) {
+    return 'templates:write';
+  }
+
+  return requiredScope(toolName);
 }
 
 /**
@@ -126,8 +145,12 @@ export function grantedScopes(scopes: string[]): Set<string> {
  * A token with no scope claim keeps full privilege: tokens issued before scopes existed,
  * and stdio, must not lose access.
  */
-export function mayCallTool(toolName: string, scopes: string[]): { allowed: boolean; required: string | null } {
-  const required = requiredScope(toolName);
+export function mayCallTool(
+  toolName: string,
+  scopes: string[],
+  args?: Record<string, unknown>,
+): { allowed: boolean; required: string | null } {
+  const required = args === undefined ? requiredScope(toolName) : requiredScopeForCall(toolName, args);
 
   if (required === null || scopes.length === 0) {
     return { allowed: true, required };
@@ -140,5 +163,5 @@ export function mayCallTool(toolName: string, scopes: string[]): { allowed: bool
  * The tools a grant may call, so clients never see one they cannot use.
  */
 export function visibleTools(scopes: string[]): string[] {
-  return [...toolDefinitionMap.keys()].filter(toolName => mayCallTool(toolName, scopes).allowed);
+  return [...catalogue.keys()].filter(toolName => mayCallTool(toolName, scopes).allowed);
 }

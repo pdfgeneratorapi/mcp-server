@@ -6,10 +6,14 @@
 import type { MiddlewareHandler } from 'hono';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import { log } from './logger.js';
+import { RUN_BUILDER_TOOL } from './builder.js';
 
 export const REQUEST_MESSAGE = 'MCP request';
 
 const MAX_TEXT_LENGTH = 200;
+
+// A builder tool is named by an argument, so only a value shaped like a tool name is logged
+const BUILDER_TOOL_NAME = /^[a-z][a-z0-9_]{0,63}$/;
 
 // Why a request was answered with this status before it reached the MCP handler
 const REFUSALS: Record<number, string> = {
@@ -35,6 +39,7 @@ export interface ClientInfo {
 export interface RequestFacts {
   method?: string;
   tool?: string;
+  builderTool?: string;
   client?: ClientInfo;
   refusal?: string;
   /** A tools/call handed to the tool handler, which logs it once the outcome is known. */
@@ -43,6 +48,7 @@ export interface RequestFacts {
 
 export interface ToolCallRecord {
   tool: string;
+  builderTool?: string;
   outcome: 'ok' | 'error' | 'refused';
   refusal?: string;
   upstreamStatus?: number;
@@ -61,17 +67,28 @@ export function clientInfoOf(initialize: unknown): ClientInfo {
   };
 }
 
-export function describeRequest(body: unknown): Pick<RequestFacts, 'method' | 'tool'> {
+export function describeRequest(body: unknown): Pick<RequestFacts, 'method' | 'tool' | 'builderTool'> {
   if (Array.isArray(body)) {
     return { method: 'batch' };
   }
 
-  const request = body as { method?: unknown; params?: { name?: unknown } } | null;
+  const request = body as { method?: unknown; params?: { name?: unknown; arguments?: unknown } } | null;
+  const tool = request?.method === 'tools/call' ? text(request.params?.name) : undefined;
 
   return {
     method: text(request?.method),
-    tool: request?.method === 'tools/call' ? text(request.params?.name) : undefined,
+    tool,
+    builderTool: tool === undefined ? undefined : builderToolOf(tool, request?.params?.arguments),
   };
+}
+
+/** The builder tool a run_builder_tool call names. */
+export function builderToolOf(tool: string, args: unknown): string | undefined {
+  const builderTool = (args as { tool?: unknown } | null | undefined)?.tool;
+
+  return tool === RUN_BUILDER_TOOL && typeof builderTool === 'string' && BUILDER_TOOL_NAME.test(builderTool)
+    ? builderTool
+    : undefined;
 }
 
 /**
@@ -98,6 +115,7 @@ export function logRequests(): MiddlewareHandler {
       http_method: c.req.method,
       method: facts.method,
       tool: facts.tool,
+      builder_tool: facts.builderTool,
       status,
       outcome: status >= 500 ? 'error' : status >= 400 ? 'refused' : 'ok',
       refusal: status >= 400 ? facts.refusal ?? refusalOf(c.res) : undefined,
@@ -113,6 +131,7 @@ export function logToolCall(record: ToolCallRecord, authInfo: AuthInfo | undefin
     http_method: 'POST',
     method: 'tools/call',
     tool: record.tool,
+    builder_tool: record.builderTool,
     outcome: record.outcome,
     refusal: record.refusal,
     upstream_status: record.upstreamStatus,

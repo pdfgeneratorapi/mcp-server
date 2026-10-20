@@ -14,6 +14,7 @@ jest.unstable_mockModule('axios', () => {
 const { createMcpServer } = await import('../server.js');
 const { createStaticCredentials } = await import('../credentials/upstream.js');
 const { toolDefinitionMap } = await import('../tools.js');
+const { catalogue } = await import('../catalogue.js');
 const { SERVER_NAME, SERVER_VERSION } = await import('../config.js');
 const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
 const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
@@ -80,7 +81,7 @@ describe('createMcpServer', () => {
 
       const result = await client.listTools();
 
-      expect(result.tools.length).toBe(toolDefinitionMap.size);
+      expect(result.tools.length).toBe(catalogue.size);
       for (const tool of result.tools) {
         expect(tool.name).toBeDefined();
         expect(tool.description).toBeDefined();

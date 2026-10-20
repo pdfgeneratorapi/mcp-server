@@ -14,4 +14,6 @@ export interface McpToolDefinition {
     pathTemplate: string;
     executionParameters: { name: string, in: string }[];
     requestBodyContentType?: string;
+    /** Where pathTemplate is resolved; API_BASE_URL when absent. */
+    baseUrl?: string;
 }
