@@ -2,10 +2,8 @@
  * OAuth 2.0 Protected Resource Metadata (RFC 9728), which tells MCP clients where to
  * get a token for this server.
  */
-import {
-  OAuthProtectedResourceMetadataSchema,
-  type OAuthProtectedResourceMetadata,
-} from '@modelcontextprotocol/sdk/shared/auth.js';
+import { OAuthProtectedResourceMetadataSchema } from '@modelcontextprotocol/core';
+import type { OAuthProtectedResourceMetadata } from '@modelcontextprotocol/server';
 import type { AuthConfig } from './config.js';
 import { SUPPORTED_SCOPES } from './scopes.js';
 

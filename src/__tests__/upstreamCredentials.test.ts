@@ -1,5 +1,5 @@
 import { describe, it, expect, jest } from '@jest/globals';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { AuthInfo } from '@modelcontextprotocol/server';
 
 const { createMintedCredentials, createStaticCredentials, UpstreamCredentialError } = await import('../credentials/upstream.js');
 

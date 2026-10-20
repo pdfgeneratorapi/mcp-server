@@ -8,7 +8,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StdioServerTransport } from "@modelcontextprotocol/server/stdio";
 import { setupStreamableHttpServer } from "./streamable-http.js";
 import { createMcpServer } from './server.js';
 import { createStaticCredentials } from './credentials/upstream.js';

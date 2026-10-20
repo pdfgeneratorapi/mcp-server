@@ -6,8 +6,8 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { v4 as uuid } from 'uuid';
-import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { InitializeRequestSchema, JSONRPCError } from "@modelcontextprotocol/sdk/types.js";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
+import { isInitializeRequest, type JSONRPCErrorResponse } from "@modelcontextprotocol/server";
 
 // Import server configuration constants and factory
 import { SERVER_NAME, SERVER_VERSION } from './config.js';
@@ -22,7 +22,7 @@ import { createMintedCredentials, type UpstreamCredentials } from './credentials
 import { createInMemorySessionStore, ownedBy, ownerOf, type SessionStore } from './sessions/store.js';
 import { guardRequests, loadTransportLimits } from './transport/guards.js';
 import { identityKey, limitRequests, loadRateLimits, RateLimiter, tooManyRequests } from './transport/rateLimit.js';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { AuthInfo } from '@modelcontextprotocol/server';
 import { loadScopeEnforcement, mayCallTool } from './auth/scopes.js';
 import { challenges } from './auth/challenges.js';
 import { clientInfoOf, describeRequest, logRequests, logToolCall, type RequestFacts } from './telemetry.js';
@@ -271,7 +271,7 @@ class MCPStreamableHttpServer {
   /**
    * Create a JSON-RPC error response
    */
-  private createErrorResponse(message: string): JSONRPCError {
+  private createErrorResponse(message: string): JSONRPCErrorResponse {
     return {
       jsonrpc: JSON_RPC,
       error: {
@@ -286,16 +286,11 @@ class MCPStreamableHttpServer {
    * Check if the request is an initialize request
    */
   private isInitializeRequest(body: any): boolean {
-    const isInitial = (data: any) => {
-      const result = InitializeRequestSchema.safeParse(data);
-      return result.success;
-    };
-    
     if (Array.isArray(body)) {
-      return body.some(request => isInitial(request));
+      return body.some(request => isInitializeRequest(request));
     }
     
-    return isInitial(body);
+    return isInitializeRequest(body);
   }
 }
 

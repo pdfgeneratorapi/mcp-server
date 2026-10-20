@@ -3,7 +3,7 @@
  */
 
 import { createMcpServer, SERVER_NAME, SERVER_VERSION } from '../index.js';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { Server } from '@modelcontextprotocol/server';
 import { createStaticCredentials } from '../credentials/upstream.js';
 
 describe('createMcpServer', () => {

@@ -1,9 +1,9 @@
 /**
  * Sessions of the HTTP transport, and who owns them.
  */
-import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import type { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { Server } from '@modelcontextprotocol/server';
+import type { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
+import type { AuthInfo } from '@modelcontextprotocol/server';
 import type { ClientInfo } from '../telemetry.js';
 
 /** Who a session belongs to. Never the token itself, so a refreshed token keeps working. */

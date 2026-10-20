@@ -4,7 +4,7 @@
  * arguments or results, which carry customer documents and data.
  */
 import type { MiddlewareHandler } from 'hono';
-import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
+import type { AuthInfo } from '@modelcontextprotocol/server';
 import { log } from './logger.js';
 import { RUN_BUILDER_TOOL } from './builder.js';
 

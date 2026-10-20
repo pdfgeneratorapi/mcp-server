@@ -2,7 +2,7 @@
  * Finds the authorization server's signing keys through its RFC 8414 metadata.
  */
 import { createRemoteJWKSet, customFetch, type JWTVerifyGetKey } from 'jose';
-import { OAuthMetadataSchema } from '@modelcontextprotocol/sdk/shared/auth.js';
+import { OAuthMetadataSchema } from '@modelcontextprotocol/core';
 import type { AuthConfig } from './config.js';
 import { AuthorizationServerUnavailableError } from './errors.js';
 
