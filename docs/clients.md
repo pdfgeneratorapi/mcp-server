@@ -16,7 +16,7 @@ Last tested 2026-10-20.
 | ChatGPT (desktop), Codex | Client ID Metadata Document (`chatgpt.com`) | yes | connection check on 2025-06-18 with a session; tool calls on 2026-07-28 | yes | yes; revokes its token on uninstall |
 | MCP Inspector 2.9.0 | Dynamic Client Registration | yes | 2026-07-28 with Protocol Era set to Auto | yes | yes |
 | Cursor 3.25.9 | Dynamic Client Registration | yes | 2025-11-25, session | yes, including the template builder | not yet observed |
-| VS Code 1.142.0 (Copilot Chat) | Client ID Metadata Document (`vscode.dev`) | yes | 2025-11-25, session | yes | not yet observed |
+| VS Code 1.142.0 (Copilot Chat) | Client ID Metadata Document (`vscode.dev`) | yes | 2025-11-25, session | yes | yes; also opens a new session when its session expired |
 
 Every client:
 
@@ -26,7 +26,17 @@ Every client:
 
 The authorization server refuses a request without a known `resource`.
 
-Not yet recorded per client: how a client reacts to a `403 insufficient_scope` step-up challenge.
+### Scope step-up
+
+When a tool call needs a permission the connection lacks, the server answers `403 insufficient_scope` with a `scope` that lists what the connection already has plus the missing permission.
+
+- **VS Code** re-authorizes on its own: it opens the consent page asking for exactly the scopes in the challenge, and retries the call after you allow it.
+
+Not yet recorded for the other clients.
+
+### Ended connections
+
+When a connection was revoked (for example in **Settings → Connected applications**), has expired, or is no longer known, the next tool call is answered with `401 invalid_token`, so the client signs in again instead of reporting an error.
 
 ## Client notes
 
@@ -36,7 +46,7 @@ Not yet recorded per client: how a client reacts to a `403 insufficient_scope` s
 
 **ChatGPT**: a chat started before the connector was added or reinstalled cannot use it; attach the connector to the chat or start a new one.
 
-**Any client**: if a client keeps a refresh token whose connection has ended (expired, revoked, or removed on the server side), it may keep retrying and report a generic error. Remove the server from the client and add it again.
+**Any client**: if a client keeps a refresh token whose connection has ended, its refresh fails and some clients report a generic error instead of signing in again. Remove the server from the client and add it again.
 
 ## Smoke test
 

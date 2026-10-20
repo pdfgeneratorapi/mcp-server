@@ -24,12 +24,12 @@ import { buildProtectedResourceMetadata } from './auth/protectedResourceMetadata
 import { requireBearerToken } from './auth/middleware.js';
 import { createRemoteKeySetProvider } from './auth/asMetadata.js';
 import { createTokenVerifier, type TokenVerifier } from './auth/verifier.js';
-import { createMintedCredentials, type UpstreamCredentials } from './credentials/upstream.js';
+import { createMintedCredentials, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
 import { createInMemorySessionStore, ownedBy, ownerOf, type SessionStore } from './sessions/store.js';
 import { guardRequests, loadTransportLimits } from './transport/guards.js';
 import { identityKey, limitRequests, loadRateLimits, RateLimiter, tooManyRequests } from './transport/rateLimit.js';
 import type { AuthInfo } from '@modelcontextprotocol/server';
-import { loadScopeEnforcement, mayCallTool } from './auth/scopes.js';
+import { loadScopeEnforcement, mayCallTool, SUPPORTED_SCOPES } from './auth/scopes.js';
 import { challenges } from './auth/challenges.js';
 import { clientInfoOf, describeRequest, envelopeClientOf, logRequests, logToolCall, type RequestFacts } from './telemetry.js';
 
@@ -41,6 +41,8 @@ const SESSION_CLEANUP_INTERVAL_MS = 60 * 1000; // Check every minute
 const SESSION_RETRY_AFTER_SECONDS = '60';
 const WELL_KNOWN_PROTECTED_RESOURCE_PATH = '/.well-known/oauth-protected-resource';
 const METADATA_CACHE_CONTROL = 'public, max-age=3600';
+// Credential refusals that mean the client's connection has ended, so it has to sign in again
+const ENDED_GRANT_CODES = new Set(['unknown_grant', 'revoked_grant', 'expired_grant']);
 
 /**
  * StreamableHTTP MCP Server handler
@@ -115,7 +117,12 @@ class MCPStreamableHttpServer {
     const owner = ownerOf(this.issuer, c.get('authInfo'));
     const session = this.sessions.get(sessionId);
 
-    if (!owner || !session || !ownedBy(session, owner)) {
+    if (!session) {
+      log.debug(`Unknown or expired session "${sessionId}"`);
+      return null;
+    }
+
+    if (!owner || !ownedBy(session, owner)) {
       log.warn(`Refused session "${sessionId}" for another identity`);
       return null;
     }
@@ -168,6 +175,13 @@ class MCPStreamableHttpServer {
       if (refusal) {
         facts.refusal = 'insufficient_scope';
         return c.json(refusal.body, refusal.status, { 'WWW-Authenticate': refusal.wwwAuthenticate });
+      }
+
+      const ended = await this.endedGrant(body, authInfo);
+
+      if (ended) {
+        facts.refusal = 'ended_grant';
+        return c.json(ended.body, ended.status, { 'WWW-Authenticate': ended.wwwAuthenticate });
       }
 
       if (!(await isLegacyRequest(c.req.raw, body))) {
@@ -299,7 +313,30 @@ class MCPStreamableHttpServer {
 
     log.warn(`Refused "${request.params.name}": the token does not grant "${decision.required}"`);
 
-    return challenges.insufficientScope(this.resourceMetadataUrl, [decision.required]);
+    // Clients ask for exactly these scopes, so name the ones already granted too
+    return challenges.insufficientScope(this.resourceMetadataUrl, [...new Set([...(authInfo?.scopes ?? []), decision.required])]);
+  }
+
+  /**
+   * The sign-in challenge for a single tools/call whose connection has ended (revoked, expired or
+   * unknown to the authorization server), which a tool error would only report. The credential is
+   * cached per grant, so the tool call that follows reuses it.
+   */
+  private async endedGrant(body: unknown, authInfo: AuthInfo | undefined) {
+    if (Array.isArray(body) || (body as { method?: string } | null)?.method !== 'tools/call') {
+      return null;
+    }
+
+    try {
+      await this.credentials.get(authInfo);
+    } catch (error) {
+      if (error instanceof UpstreamCredentialError && ENDED_GRANT_CODES.has(error.code ?? '')) {
+        log.warn(`Refused a tool call: the connection has ended (${error.code})`);
+        return challenges.invalidToken(this.resourceMetadataUrl, SUPPORTED_SCOPES);
+      }
+    }
+
+    return null;
   }
 
   /**

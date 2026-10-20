@@ -147,6 +147,27 @@ describe('session identity binding', () => {
     expect((await listTools(url, 'user-a.client-1.first', '00000000-0000-4000-8000-000000000000')).status).toBe(404);
   });
 
+  /**
+   * Both answer 404 alike, but an expired session is routine and must not read as an attempt
+   * on someone else's session.
+   */
+  it('logs only a session of another identity as refused for that identity', async () => {
+    const output: string[] = [];
+    jest.spyOn(console, 'error').mockImplementation((...args: unknown[]) => { output.push(args.map(String).join(' ')); });
+    const unknownSession = '00000000-0000-4000-8000-000000000000';
+
+    try {
+      const url = await startServer();
+      const sessionId = await openSession(url, 'user-a.client-1.first');
+      await listTools(url, 'user-b.client-1.first', sessionId);
+      await listTools(url, 'user-a.client-1.first', unknownSession);
+
+      expect(output.filter(line => line.includes('another identity'))).toEqual([expect.stringContaining(sessionId)]);
+    } finally {
+      jest.restoreAllMocks();
+    }
+  });
+
   it('terminates a session on DELETE and forgets it', async () => {
     const url = await startServer();
     const token = 'user-a.client-1.first';

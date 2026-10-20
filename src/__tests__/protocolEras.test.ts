@@ -150,8 +150,8 @@ describe('the 2026-07-28 revision', () => {
     await client.callTool({ name: 'get_status', arguments: {} });
     await client.callTool({ name: 'get_status', arguments: {} });
 
-    expect(credentials.get).toHaveBeenCalledTimes(2);
-    expect(credentials.get).toHaveBeenCalledWith(expect.objectContaining({ token: 'user-1.client-1', clientId: 'client-1' }));
+    expect(credentials.get.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(credentials.get.mock.calls.every(([authInfo]: any[]) => authInfo?.token === 'user-1.client-1' && authInfo?.clientId === 'client-1')).toBe(true);
     expect(mockAxios).toHaveBeenCalledWith(expect.objectContaining({
       headers: expect.objectContaining({ authorization: 'Bearer upstream-token' }),
     }));
