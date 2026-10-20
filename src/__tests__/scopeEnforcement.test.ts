@@ -90,7 +90,24 @@ describe('scope enforcement over HTTP', () => {
 
     expect(response.status).toBe(403);
     expect(response.headers.get('www-authenticate')).toContain('error="insufficient_scope"');
-    expect(response.headers.get('www-authenticate')).toContain('scope="templates:delete"');
+    expect(response.headers.get('www-authenticate')).toContain('scope="templates:read templates:delete"');
+  });
+
+  /**
+   * Clients ask for exactly the scopes the challenge names, so a challenge naming only the
+   * missing scope would leave the client with a grant that has only that scope.
+   */
+  it('asks for every scope the token already has, plus the missing one', async () => {
+    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
+    const token = 'user-a.client-1.templates~read+documents~read+forms~read';
+    const { url, sessionId } = await connect(token);
+
+    const response = await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 7, tool: 'rename_template' });
+    await response.text();
+
+    expect(response.status).toBe(403);
+    expect(/scope="([^"]*)"/.exec(response.headers.get('www-authenticate') ?? '')?.[1])
+      .toBe('templates:read documents:read forms:read templates:write');
   });
 
   it('lets a call the grant covers through', async () => {
@@ -130,7 +147,7 @@ describe('scope enforcement over HTTP', () => {
     await response.text();
 
     expect(response.status).toBe(403);
-    expect(response.headers.get('www-authenticate')).toContain('scope="templates:write"');
+    expect(response.headers.get('www-authenticate')).toContain('scope="templates:read templates:write"');
   });
 
   it('lets a template-read client run a builder tool that only reads', async () => {
