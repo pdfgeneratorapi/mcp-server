@@ -310,7 +310,7 @@ function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTyp
         return z.object({}).passthrough(); 
     }
     try {
-        const zodSchemaString = jsonSchemaToZod(allowUnnamedProperties(jsonSchema));
+        const zodSchemaString = jsonSchemaToZod(allowUnnamedProperties(oneOfAsAnyOf(jsonSchema)));
         // Use Function constructor instead of eval() to restrict scope.
         // Only `z` (zod) is available — no access to process, require, globals, etc.
         const zodSchema = new Function('z', `"use strict"; return (${zodSchemaString});`)(z);
@@ -322,6 +322,35 @@ function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTyp
         log.warn(`Failed to generate/evaluate Zod schema for '${toolName}':`, err);
         return z.object({}).passthrough();
     }
+}
+
+/**
+ * json-schema-to-zod writes TypeScript for oneOf (`schemas.reduce<z.ZodError[]>(…)`), which cannot
+ * be evaluated, so the tool fell back to accepting anything. anyOf builds: a value matching two
+ * options passes, and every named key is still checked. A property named oneOf is left alone.
+ */
+function oneOfAsAnyOf(schema: any, isPropertyMap = false): any {
+    if (Array.isArray(schema)) {
+        return schema.map((item) => oneOfAsAnyOf(item));
+    }
+
+    if (!schema || typeof schema !== 'object') {
+        return schema;
+    }
+
+    const converted: any = Object.fromEntries(
+        Object.entries(schema).map(([key, value]) => [key, oneOfAsAnyOf(value, !isPropertyMap && key === 'properties')]),
+    );
+
+    if (isPropertyMap || converted.oneOf === undefined) {
+        return converted;
+    }
+
+    const { oneOf, anyOf, ...rest } = converted;
+
+    return anyOf === undefined
+        ? { ...rest, anyOf: oneOf }
+        : { ...rest, allOf: [...(rest.allOf ?? []), { anyOf: oneOf }, { anyOf }] };
 }
 
 /**
