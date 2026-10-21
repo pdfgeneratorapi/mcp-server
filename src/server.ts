@@ -11,13 +11,16 @@ import { log } from './logger.js';
 import { simplifySchemaForOpenAI } from './schema.js';
 import { catalogue } from './catalogue.js';
 import { executeApiTool } from './execute.js';
-import type { UpstreamCredentials } from './credentials/upstream.js';
+import { isEndedGrant, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
 import { loadScopeEnforcement, mayCallTool, visibleTools } from './auth/scopes.js';
 import { builderToolOf, elapsedSince, type ToolCallRecord } from './telemetry.js';
 import type { AuthInfo } from '@modelcontextprotocol/server';
 
 /** Told how each tool call went, once it has an outcome. */
 export type ToolCallObserver = (record: ToolCallRecord, extra: { authInfo?: AuthInfo; sessionId?: string }) => void;
+
+const ENDED_CONNECTION_MESSAGE = 'This connection has ended: it was revoked, has expired, or is no longer known. '
+    + 'Send the request again, and you will be asked to sign in.';
 
 /**
  * Tool annotations — hints for MCP clients about tool behavior
@@ -182,15 +185,26 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
             }
         }
 
+        let ended = false;
         const upstreamAuth = credentials && {
-            getToken: () => credentials.get(extra.authInfo),
+            getToken: () => credentials.get(extra.authInfo).catch((error: unknown) => {
+                if (!isEndedGrant(error)) {
+                    throw error;
+                }
+
+                // The HTTP layer challenges the next request; this one can only say so.
+                ended = true;
+                throw new UpstreamCredentialError(ENDED_CONNECTION_MESSAGE, error.status, error.code, { cause: error });
+            }),
             invalidate: () => credentials.invalidate(extra.authInfo),
         };
         let upstreamStatus: number | undefined;
         const result = await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, upstreamAuth, (status) => {
             upstreamStatus = status;
         });
-        observe({ outcome: result.isError ? 'error' : 'ok', upstreamStatus });
+        observe(ended
+            ? { outcome: 'error', refusal: 'ended_grant', upstreamStatus }
+            : { outcome: result.isError ? 'error' : 'ok', upstreamStatus });
 
         return result;
     });

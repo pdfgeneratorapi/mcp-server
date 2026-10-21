@@ -63,11 +63,11 @@ async function openSession(url: string) {
   return response.headers.get('mcp-session-id') as string;
 }
 
-async function legacyCall(url: string, sessionId: string) {
+async function legacyCall(url: string, sessionId: string, id = 2) {
   const response = await fetch(url, {
     method: 'POST',
     headers: headers({ 'mcp-session-id': sessionId }),
-    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'get_status', arguments: {} } }),
+    body: JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'get_status', arguments: {} } }),
   });
 
   return { response, body: await response.text() };
@@ -115,6 +115,40 @@ describe('a connection that has ended', () => {
 
     expect(response.status).toBe(401);
     expect(response.headers.get('www-authenticate')).toContain('error="invalid_token"');
+  });
+
+  /**
+   * A credential cached before the revoke passes the check, and the API refuses it only once the
+   * call is under way. That call can only report the end; the next one is challenged.
+   */
+  it('tells the client to send again when the connection ended during the call, then challenges it', async () => {
+    let ended = false;
+    mockAxios.mockRejectedValue({ isAxiosError: true, response: { status: 401, headers: {}, data: Buffer.from('{}') } });
+    const url = await start({
+      get: async () => {
+        if (ended) {
+          throw new UpstreamCredentialError('No API credential for this connection: The access token has been revoked.', 403, 'revoked_grant');
+        }
+
+        return 'cached-credential';
+      },
+      invalidate: () => {
+        ended = true;
+      },
+    });
+    const sessionId = await openSession(url);
+
+    const first = await legacyCall(url, sessionId);
+
+    expect(first.response.status).toBe(200);
+    expect(first.body).toContain('"isError":true');
+    expect(first.body).toContain('This connection has ended');
+    expect(first.body).toContain('Send the request again');
+
+    const second = await legacyCall(url, sessionId, 3);
+
+    expect(second.response.status).toBe(401);
+    expect(second.response.headers.get('www-authenticate')).toContain('error="invalid_token"');
   });
 
   /** Signing in again would not help with these, so the tool reports them. */
