@@ -20,6 +20,13 @@ export class UpstreamCredentialError extends Error {
   }
 }
 
+// Refusals that mean the client's connection has ended, so it has to sign in again
+const ENDED_GRANT_CODES = new Set(['unknown_grant', 'revoked_grant', 'expired_grant']);
+
+export function isEndedGrant(error: unknown): error is UpstreamCredentialError {
+  return error instanceof UpstreamCredentialError && ENDED_GRANT_CODES.has(error.code ?? '');
+}
+
 export interface MintedCredentialsOptions {
   /** The api's internal credential endpoint. */
   url: string;

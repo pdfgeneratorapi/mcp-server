@@ -24,7 +24,7 @@ import { buildProtectedResourceMetadata } from './auth/protectedResourceMetadata
 import { requireBearerToken } from './auth/middleware.js';
 import { createRemoteKeySetProvider } from './auth/asMetadata.js';
 import { createTokenVerifier, type TokenVerifier } from './auth/verifier.js';
-import { createMintedCredentials, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
+import { createMintedCredentials, isEndedGrant, type UpstreamCredentials } from './credentials/upstream.js';
 import { createInMemorySessionStore, ownedBy, ownerOf, type SessionStore } from './sessions/store.js';
 import { guardRequests, loadTransportLimits } from './transport/guards.js';
 import { identityKey, limitRequests, loadRateLimits, RateLimiter, tooManyRequests } from './transport/rateLimit.js';
@@ -41,8 +41,6 @@ const SESSION_CLEANUP_INTERVAL_MS = 60 * 1000; // Check every minute
 const SESSION_RETRY_AFTER_SECONDS = '60';
 const WELL_KNOWN_PROTECTED_RESOURCE_PATH = '/.well-known/oauth-protected-resource';
 const METADATA_CACHE_CONTROL = 'public, max-age=3600';
-// Credential refusals that mean the client's connection has ended, so it has to sign in again
-const ENDED_GRANT_CODES = new Set(['unknown_grant', 'revoked_grant', 'expired_grant']);
 
 /**
  * StreamableHTTP MCP Server handler
@@ -320,7 +318,8 @@ class MCPStreamableHttpServer {
   /**
    * The sign-in challenge for a single tools/call whose connection has ended (revoked, expired or
    * unknown to the authorization server), which a tool error would only report. The credential is
-   * cached per grant, so the tool call that follows reuses it.
+   * cached per grant, so the tool call that follows reuses it; a credential cached before the end
+   * passes here, and only the call after the API refused it is challenged.
    */
   private async endedGrant(body: unknown, authInfo: AuthInfo | undefined) {
     if (Array.isArray(body) || (body as { method?: string } | null)?.method !== 'tools/call') {
@@ -330,7 +329,7 @@ class MCPStreamableHttpServer {
     try {
       await this.credentials.get(authInfo);
     } catch (error) {
-      if (error instanceof UpstreamCredentialError && ENDED_GRANT_CODES.has(error.code ?? '')) {
+      if (isEndedGrant(error)) {
         log.warn(`Refused a tool call: the connection has ended (${error.code})`);
         return challenges.invalidToken(this.resourceMetadataUrl, SUPPORTED_SCOPES);
       }

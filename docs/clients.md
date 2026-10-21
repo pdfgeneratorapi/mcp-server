@@ -6,7 +6,7 @@ Run `npm run smoke` (see [the smoke test](#smoke-test)) to check a deployment's 
 
 ## Results
 
-Last tested 2026-10-20.
+Last tested 2026-10-21.
 
 | Client (version) | Registration | Sends `resource` | Protocol | Tool calls | Silent refresh |
 |---|---|---|---|---|---|
@@ -15,7 +15,7 @@ Last tested 2026-10-20.
 | ChatGPT (web) | Dynamic Client Registration, or its Client ID Metadata Document | yes | 2025-era, session | yes | yes |
 | ChatGPT (desktop), Codex | Client ID Metadata Document (`chatgpt.com`) | yes | connection check on 2025-06-18 with a session; tool calls on 2026-07-28 | yes | yes; revokes its token on uninstall |
 | MCP Inspector 2.9.0 | Dynamic Client Registration | yes | 2026-07-28 with Protocol Era set to Auto | yes | yes |
-| Cursor 3.25.9 | Dynamic Client Registration | yes | 2025-11-25, session | yes, including the template builder | not yet observed |
+| Cursor 3.25.9 | Dynamic Client Registration | yes | 2025-11-25, session | yes, including the template builder | yes |
 | VS Code 1.142.0 (Copilot Chat) | Client ID Metadata Document (`vscode.dev`) | yes | 2025-11-25, session | yes | yes; also opens a new session when its session expired |
 
 Every client:
@@ -30,7 +30,7 @@ The authorization server refuses a request without a known `resource`.
 
 When a tool call needs a permission the connection lacks, the server answers `403 insufficient_scope` with a `scope` that lists what the connection already has plus the missing permission.
 
-- **VS Code** re-authorizes on its own: it opens the consent page asking for exactly the scopes in the challenge, and retries the call after you allow it.
+- **VS Code** re-authorizes on its own: it opens the consent page asking for exactly the scopes in the challenge, so the connection keeps the permissions it had, and retries the call after you allow it.
 
 Not yet recorded for the other clients.
 
@@ -38,11 +38,13 @@ Not yet recorded for the other clients.
 
 When a connection was revoked (for example in **Settings → Connected applications**), has expired, or is no longer known, the next tool call is answered with `401 invalid_token`, so the client signs in again instead of reporting an error.
 
+The server keeps the API credential of a connection for a few minutes. If it still holds one from before the connection ended, that tool call fails with an error saying the connection has ended and asking to send the request again; the request after it is answered with `401 invalid_token`.
+
 ## Client notes
 
 **MCP Inspector**: each server's **Settings → Protocol Era** defaults to **Legacy (2025-11-25 handshake)**, so Inspector reports the legacy era even though the server supports 2026-07-28. Set it to **Auto** or **Modern**. If Inspector reuses a client registration the authorization server no longer knows, the sign-in page answers `invalid_client`: use **Clear stored OAuth state** in the same settings and connect again.
 
-**VS Code**: the server is configured in VS Code's own `mcp.json` under `"servers"` (**MCP: Add Server**, or **MCP: Open User Configuration**), not in `~/.copilot/mcp-config.json`, which belongs to the Copilot CLI. Its tools are used from Copilot Chat in **Agent** mode, which needs a signed-in GitHub Copilot account; start the server from `mcp.json` or **MCP: List Servers** to sign in.
+**VS Code**: the server is configured in VS Code's own `mcp.json` under `"servers"` (**MCP: Add Server**, or **MCP: Open User Configuration**), not in `~/.copilot/mcp-config.json`, which belongs to the Copilot CLI. Its tools are used from Copilot Chat in **Agent** mode, which needs a signed-in GitHub Copilot account; start the server from `mcp.json` or **MCP: List Servers** to sign in. If a sign-in is left unfinished (the consent page denied, or its prompt closed), VS Code stops asking for that server: run **Developer: Reload Window** and start the server again.
 
 **ChatGPT**: a chat started before the connector was added or reinstalled cannot use it; attach the connector to the chat or start a new one.
 
