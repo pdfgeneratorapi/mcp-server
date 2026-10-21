@@ -1,0 +1,27 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.pdfgeneratorapi/mcp-server",
+  "title": "PDF Generator API",
+  "description": "Generate PDFs from templates and manage templates, forms and workspaces in PDF Generator API.",
+  "websiteUrl": "https://pdfgeneratorapi.com",
+  "icons": [
+    {
+      "src": "https://mcp.pdfgeneratorapi.com/icon.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "256x256"
+      ]
+    }
+  ],
+  "repository": {
+    "url": "https://github.com/pdfgeneratorapi/mcp-server",
+    "source": "github"
+  },
+  "version": "5.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.pdfgeneratorapi.com/mcp"
+    }
+  ]
+}
