@@ -19,9 +19,9 @@ beforeEach(() => {
 });
 
 describe('the template builder address', () => {
-  it('sits beside the API, outside its versioned path', () => {
+  it('is reached in-cluster, not through the public API host', () => {
     expect(API_BASE_URL).toBe('https://test-api.example.com/api/v4');
-    expect(BUILDER_BASE_URL).toBe('https://test-api.example.com/api/mcp/builder');
+    expect(BUILDER_BASE_URL).toBe('http://pdf-api-main/api/mcp/builder');
   });
 });
 
