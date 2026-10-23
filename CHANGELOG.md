@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.0.0 — unreleased
+## 5.0.1 — 2026-10-23
+
+### Fixed
+
+- The template builder tools answered 404 on the hosted server: their address was derived from `API_BASE_URL`, whose host does not route the builder path. `BUILDER_BASE_URL` now defaults to the in-cluster service, `http://pdf-api-main/api/mcp/builder`; stdio development outside the cluster sets it explicitly.
+
+## 5.0.0 — 2026-10-22
 
 Version 5 is the hosted PDF Generator API MCP server at `https://mcp.pdfgeneratorapi.com/mcp`. Clients connect with OAuth: the user signs in, chooses a workspace and grants permissions, with no token to create. It is not published as a package; see [the migration guide](docs/migrating-from-4.x.md).
 
