@@ -17,7 +17,7 @@
     "url": "https://github.com/pdfgeneratorapi/mcp-server",
     "source": "github"
   },
-  "version": "5.0.0",
+  "version": "5.0.1",
   "remotes": [
     {
       "type": "streamable-http",

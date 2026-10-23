@@ -1,6 +1,6 @@
 {
   "name": "@pdfgeneratorapi/mcp-server",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Model Context Protocol (MCP) server for the PDF Generator API - enables AI assistants to generate PDFs, manage templates, and use PDF services",
   "private": true,
   "type": "module",

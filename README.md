@@ -149,7 +149,7 @@ HTTP mode accepts only access tokens issued by the authorization server in `OAUT
 | Variable | Mode | Default | Description |
 |----------|------|---------|-------------|
 | `API_BASE_URL` | Both | `https://us1.pdfgeneratorapi.com/api/v4` | PDF Generator API base URL |
-| `BUILDER_BASE_URL` | Both | derived from `API_BASE_URL` (`…/api/mcp/builder`) | Template builder endpoints |
+| `BUILDER_BASE_URL` | Both | `http://pdf-api-main/api/mcp/builder` | In-cluster template builder endpoints; set it for stdio development outside the cluster |
 | `MCP_DEV_API_TOKEN` | stdio | — | Fixed API token, for local development only |
 | `LOG_LEVEL` | Both | `info` | `debug` adds per-request detail |
 | `PORT` | HTTP | `3000` | Server port |
