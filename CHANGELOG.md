@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `create_template`, `update_template`, `copy_template` and `import_template` answer with a summary of the saved template: its id, name, tags and draft state, how many pages and components it has, and anything else the API reports next to the template, such as warnings. The whole template could run to hundreds of thousands of characters, over a chat client's tool-output limit. Set `full_response` to `true` to get it, or read it with `get_template`.
+
 ## 5.0.1 — 2026-10-23
 
 ### Fixed
