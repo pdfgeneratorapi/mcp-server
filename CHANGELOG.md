@@ -1,5 +1,11 @@
 # Changelog
 
+## 5.2.0 — 2026-10-27
+
+### Changed
+
+- `update_template` and the server instructions point to the template builder for changing a few components: `run_builder_tool` with `patch_component`, `add_component` or `remove_component` changes one component without resending the template. `update_template`'s description no longer says the whole template is replaced; each top-level field sent replaces the stored one. Needs the API release that gives every component an id (PGA-4200); before it, a component saved without an id cannot be addressed. A template saved before that release gets its ids the next time it is saved.
+
 ## 5.1.0 — 2026-10-27
 
 ### Changed
