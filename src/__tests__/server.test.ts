@@ -162,7 +162,7 @@ describe('createMcpServer', () => {
 
     it('should use correct server name and version', () => {
       expect(SERVER_NAME).toBe('pdf-generator-api');
-      expect(SERVER_VERSION).toBe('5.1.0');
+      expect(SERVER_VERSION).toBe('5.2.0');
     });
   });
 });
