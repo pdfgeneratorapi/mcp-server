@@ -17,6 +17,9 @@ export interface UpstreamAuth {
 
 const HTTP_UNAUTHORIZED = 401;
 
+/** The argument a call sets to get the API's response whole from a tool that summarizes it. */
+export const FULL_RESPONSE_ARGUMENT = 'full_response';
+
 // Headers a tool argument must never set: tools.ts is generated from the OpenAPI
 // document, so a header parameter could otherwise override credentials or routing.
 const FORBIDDEN_HEADERS = new Set([
@@ -141,7 +144,9 @@ export async function executeApiTool(
 
     onUpstreamStatus?.(response.status);
 
-    return formatResponse(response.status, response.headers as Record<string, unknown>, response.data);
+    const summarize = validatedArgs[FULL_RESPONSE_ARGUMENT] === true ? undefined : definition.summarizeResponse;
+
+    return formatResponse(response.status, response.headers as Record<string, unknown>, response.data, summarize);
 
   } catch (error: unknown) {
     // Handle errors during execution
@@ -176,10 +181,16 @@ export async function executeApiTool(
 const TEXT_CONTENT_TYPES = [/^text\//, /json/, /xml/, /javascript/, /x-www-form-urlencoded/];
 
 /**
- * Turns an API response into tool content: JSON pretty-printed, text decoded, and any
- * other body (PDFs, images) returned byte for byte as an embedded resource.
+ * Turns an API response into tool content: JSON pretty-printed, and summarized when the tool
+ * summarizes it, text decoded, and any other body (PDFs, images) returned byte for byte as an
+ * embedded resource.
  */
-function formatResponse(status: number, headers: Record<string, unknown>, data: unknown): CallToolResult {
+function formatResponse(
+    status: number,
+    headers: Record<string, unknown>,
+    data: unknown,
+    summarize?: (body: JsonObject) => JsonObject
+): CallToolResult {
     const contentType = String(headers['content-type'] ?? '').toLowerCase();
     const body = toBuffer(data);
 
@@ -192,6 +203,13 @@ function formatResponse(status: number, headers: Record<string, unknown>, data: 
 
     if (body.length === 0) {
         return { content: [{ type: 'text', text: `API Response (Status: ${status}):\n(Status: ${status} - No body content)` }] };
+    }
+
+    const json = summarize && contentType.includes('json') ? parseJson(body) : undefined;
+
+    if (summarize && json && typeof json === 'object') {
+        const summary = JSON.stringify(summarize(json), null, 2);
+        return { content: [{ type: 'text', text: `API Response (Status: ${status}), summarized; set ${FULL_RESPONSE_ARGUMENT} to true for all of it:\n${summary}` }] };
     }
 
     if (contentType === '' || TEXT_CONTENT_TYPES.some(pattern => pattern.test(contentType))) {
@@ -234,6 +252,14 @@ function decodeText(body: Buffer, contentType: string): string {
     }
 
     return text;
+}
+
+function parseJson(body: Buffer): unknown {
+    try {
+        return JSON.parse(body.toString('utf8'));
+    } catch {
+        return undefined;
+    }
 }
 
 function safeStringify(value: unknown): string {

@@ -73,7 +73,7 @@ describe('HTTP Endpoints', () => {
     });
 
     it('should have correct server version', () => {
-      expect(SERVER_VERSION).toBe('5.0.1');
+      expect(SERVER_VERSION).toBe('5.1.0');
     });
   });
 });

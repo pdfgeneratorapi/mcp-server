@@ -16,4 +16,6 @@ export interface McpToolDefinition {
     requestBodyContentType?: string;
     /** Where pathTemplate is resolved; API_BASE_URL when absent. */
     baseUrl?: string;
+    /** Shortens the JSON response, unless the call asks for the full response. */
+    summarizeResponse?: (body: JsonObject) => JsonObject;
 }
