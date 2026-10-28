@@ -336,7 +336,7 @@ function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTyp
         return z.object({}).passthrough(); 
     }
     try {
-        const zodSchemaString = jsonSchemaToZod(allowUnnamedProperties(oneOfAsAnyOf(jsonSchema)));
+        const zodSchemaString = jsonSchemaToZod(withoutDefaults(allowUnnamedProperties(oneOfAsAnyOf(jsonSchema))));
         // Use Function constructor instead of eval() to restrict scope.
         // Only `z` (zod) is available — no access to process, require, globals, etc.
         const zodSchema = new Function('z', `"use strict"; return (${zodSchemaString});`)(z);
@@ -348,6 +348,30 @@ function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTyp
         log.warn(`Failed to generate/evaluate Zod schema for '${toolName}':`, err);
         return z.object({}).passthrough();
     }
+}
+
+/**
+ * json-schema-to-zod turns a schema default into `.default()`, so parsing filled in every field the
+ * client left out, and the request sent values nobody chose: update_template overwrote a stored
+ * fontSubsetting true with false, and document metadata got the author "Organization name". The
+ * defaults describe what the API does with a missing field; validation only checks the arguments, and
+ * the request carries what the client sent. No required field has a default. A property named
+ * default is left alone.
+ */
+function withoutDefaults(schema: any, isPropertyMap = false): any {
+    if (Array.isArray(schema)) {
+        return schema.map((item) => withoutDefaults(item));
+    }
+
+    if (!schema || typeof schema !== 'object') {
+        return schema;
+    }
+
+    return Object.fromEntries(
+        Object.entries(schema)
+            .filter(([key]) => isPropertyMap || key !== 'default')
+            .map(([key, value]) => [key, withoutDefaults(value, !isPropertyMap && key === 'properties')]),
+    );
 }
 
 /**

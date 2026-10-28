@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A tool call sends only the arguments the client gave. Validation filled in every schema default the client left out, so `update_template` without `fontSubsetting` or `barcodeAsImage` set a stored `true` back to `false`, and document tools sent the author `"Organization name"` in the metadata. The API applies its own defaults to what is missing. The tool schemas still show the defaults.
+
 ## 5.2.0 — 2026-10-27
 
 ### Changed

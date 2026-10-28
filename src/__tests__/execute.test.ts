@@ -704,3 +704,73 @@ describe('executeApiTool with form actions', () => {
   });
 });
 
+/**
+ * Validation used to fill in every schema default the client left out, so update_template overwrote a
+ * stored fontSubsetting true with false, and document metadata got the author "Organization name".
+ */
+describe('executeApiTool with schema defaults', () => {
+  const ok = { status: 200, headers: { 'content-type': 'application/json' }, data: { response: {} } };
+
+  const tool = makeTool({
+    method: 'post',
+    requestBodyContentType: 'application/json',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        requestBody: {
+          type: 'object',
+          properties: {
+            output: { type: 'string', enum: ['base64', 'url'], default: 'base64' },
+            metadata: { type: 'object', properties: { author: { type: 'string', default: 'Organization name' } } },
+            default: { type: 'string', description: 'A field that happens to be named default' },
+          },
+        },
+      },
+    },
+  });
+
+  it('sends update_template only the fields the client gave', async () => {
+    mockAxios.mockResolvedValue(ok);
+
+    await executeApiTool('update_template', toolDefinitionMap.get('update_template')!, {
+      templateId: 42,
+      requestBody: { name: 'Invoice' },
+    });
+
+    expect((mockAxios.mock.calls[0][0] as any).data).toEqual({ name: 'Invoice' });
+  });
+
+  it('leaves out a default nested in an object', async () => {
+    mockAxios.mockResolvedValue(ok);
+
+    await executeApiTool('convert', tool, { requestBody: { metadata: {} } });
+
+    expect((mockAxios.mock.calls[0][0] as any).data).toEqual({ metadata: {} });
+  });
+
+  it('still checks a field that has a default', async () => {
+    const result = await executeApiTool('convert', tool, { requestBody: { output: 'pdf' } });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('still checks a property named default', async () => {
+    mockAxios.mockResolvedValue(ok);
+
+    const rejected = await executeApiTool('convert', tool, { requestBody: { default: 5 } });
+    await executeApiTool('convert', tool, { requestBody: { default: 'kept' } });
+
+    expect(rejected.isError).toBe(true);
+    expect((mockAxios.mock.calls[0][0] as any).data).toEqual({ default: 'kept' });
+  });
+
+  it('keeps the defaults in the schema the client is shown', async () => {
+    mockAxios.mockResolvedValue(ok);
+
+    await executeApiTool('convert', tool, { requestBody: {} });
+
+    expect((tool.inputSchema as any).properties.requestBody.properties.output.default).toBe('base64');
+  });
+});
+
