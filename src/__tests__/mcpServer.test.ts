@@ -36,7 +36,7 @@ describe('createMcpServer', () => {
     });
 
     it('should use correct server version constant', () => {
-      expect(SERVER_VERSION).toBe('5.2.0');
+      expect(SERVER_VERSION).toBe('5.2.1');
     });
   });
 });
