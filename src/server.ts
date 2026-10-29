@@ -85,6 +85,7 @@ const toolAnnotations: Record<string, { title: string; readOnlyHint?: boolean; d
     convert_pdf_to_image:                { title: "Convert PDF to Images",              readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     get_template_library:                { title: "List Library Templates",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     get_template_library_item:           { title: "Get Library Template",               readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    list_fonts:                          { title: "List Fonts",                         readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     get_builder_guide:                   { title: "Get Template Builder Guide",         readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     list_builder_tools:                  { title: "List Template Builder Tools",        readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     // Changes are saved as template versions, so a removed component can be restored.
@@ -138,7 +139,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         },
         {
             capabilities: { tools: {}, prompts: {} },
-            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with get_templates, then generate documents with generate_document. To build or restyle a template step by step, or change a few of its components without resending it, read get_builder_guide, list the steps with list_builder_tools and apply them with run_builder_tool. The connection acts in the workspace the user chose when connecting, with the permissions they granted; tools outside those permissions are not listed.",
+            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with get_templates, then generate documents with generate_document. To build or restyle a template step by step, or change a few of its components without resending it, read get_builder_guide, list the steps with list_builder_tools and apply them with run_builder_tool. Take every fontFamily from list_fonts. The connection acts in the workspace the user chose when connecting, with the permissions they granted; tools outside those permissions are not listed.",
         }
     );
 

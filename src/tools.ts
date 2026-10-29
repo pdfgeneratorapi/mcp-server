@@ -589,4 +589,16 @@ nothing and is not charged.
     executionParameters: [{"name":"publicId","in":"path"}],
     requestBodyContentType: undefined,
   }],
+  ["list_fonts", {
+    name: "list_fonts",
+    description: `Returns the fonts the workspace's templates can use, sorted by name. Use a font's \`id\` as a component's \`fontFamily\`: a font that is not in this list is drawn with Open Sans, so pick from it instead of guessing or rendering test documents.
+
+Each font lists the styles it has glyphs of its own for (text in another style is drawn with the regular glyphs), and the Unicode blocks it has at least half of the characters of, with the share in percent. To check particular characters, such as another script, currency signs or symbols like ✓, pass them in \`covers\`: only the fonts that can draw every one of them are returned.
+`,
+    inputSchema: {"type":"object","properties":{"covers":{"type":"string","maxLength":1000,"description":"Text whose every character a font must have a glyph for, in its regular style, to be returned. Control characters are ignored."}}},
+    method: "get",
+    pathTemplate: "/fonts",
+    executionParameters: [{"name":"covers","in":"query"}],
+    requestBodyContentType: undefined,
+  }],
 ]);

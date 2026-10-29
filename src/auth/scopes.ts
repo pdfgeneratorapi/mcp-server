@@ -27,6 +27,8 @@ export const TOOL_SCOPES: Record<string, string | null> = {
 
   get_templates: 'templates:read',
   get_template: 'templates:read',
+  // The workspace's fonts include those licensed to its organization only.
+  list_fonts: 'templates:read',
   get_template_data: 'templates:read',
   validate_template: 'templates:read',
   list_template_versions: 'templates:read',
