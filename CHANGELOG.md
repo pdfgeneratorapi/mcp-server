@@ -6,6 +6,10 @@
 
 - `list_fonts` lists the fonts the workspace's templates can use, so a client picks a `fontFamily` instead of guessing one; an unknown font is drawn with Open Sans. Each font has its `id`, its name, the styles it has glyphs of its own for, and the Unicode blocks it has at least half of, in percent. `covers` keeps only the fonts that can draw every character of a text, such as `₹` or `✓`. Needs the API release with `GET /fonts` (PGA-4180); before it, the tool answers 404.
 
+### Fixed
+
+- `update_template` no longer needs `name`. An update replaces only the top-level fields it sends, so `{"fontSubsetting": false}` changes that setting and keeps the stored name; the tool refused it before it reached the API. Needs the API release that accepts an update without a name (PGA-4225); before it, the API answers 422. `create_template` and `validate_template` still need a name.
+
 ## 5.2.1 — 2026-10-28
 
 ### Fixed

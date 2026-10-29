@@ -740,6 +740,31 @@ describe('executeApiTool with schema defaults', () => {
     expect((mockAxios.mock.calls[0][0] as any).data).toEqual({ name: 'Invoice' });
   });
 
+  /**
+   * An update replaces only the fields it sends, so changing one setting needs no name: the stored
+   * one is kept. Validation refused it before it reached the API (PGA-4225).
+   */
+  it('sends update_template a setting on its own, without the name', async () => {
+    mockAxios.mockResolvedValue(ok);
+
+    const result = await executeApiTool('update_template', toolDefinitionMap.get('update_template')!, {
+      templateId: 42,
+      requestBody: { fontSubsetting: false },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data).toEqual({ fontSubsetting: false });
+  });
+
+  it('still needs a name to create a template', async () => {
+    const result = await executeApiTool('create_template', toolDefinitionMap.get('create_template')!, {
+      requestBody: { fontSubsetting: false },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
   it('leaves out a default nested in an object', async () => {
     mockAxios.mockResolvedValue(ok);
 
