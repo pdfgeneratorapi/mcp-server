@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `list_fonts` lists the fonts the workspace's templates can use, so a client picks a `fontFamily` instead of guessing one; an unknown font is drawn with Open Sans. Each font has its `id`, its name, the styles it has glyphs of its own for, and the Unicode blocks it has at least half of, in percent. `covers` keeps only the fonts that can draw every character of a text, such as `₹` or `✓`. Needs the API release with `GET /fonts` (PGA-4180); before it, the tool answers 404.
+
 ## 5.2.1 — 2026-10-28
 
 ### Fixed

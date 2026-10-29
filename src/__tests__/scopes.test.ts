@@ -19,6 +19,7 @@ describe('the tool-to-scope map', () => {
 
   it.each([
     ['get_templates', 'templates:read'],
+    ['list_fonts', 'templates:read'],
     ['create_template', 'templates:write'],
     ['delete_template', 'templates:delete'],
     ['open_editor', 'templates:write'],
@@ -99,6 +100,7 @@ describe('the visible tools', () => {
 
     expect(visible).toContain('get_templates');
     expect(visible).toContain('get_template_data');
+    expect(visible).toContain('list_fonts');
     expect(visible).toContain('get_status');
     expect(visible).not.toContain('create_template');
     expect(visible).not.toContain('delete_template');
