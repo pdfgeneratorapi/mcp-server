@@ -98,4 +98,22 @@ describe('tool argument schemas', () => {
     expect((result.content[0] as { text: string }).text).toContain('requestBody.layout.margins');
     expect(mockAxios).not.toHaveBeenCalled();
   });
+
+  it('sends a URL to PDF conversion with only the URL, for the API to fill in its defaults', async () => {
+    const result = await run('convert_url_to_pdf', { requestBody: { url: 'https://example.test/report' } });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data).toEqual({ url: 'https://example.test/report' });
+  });
+
+  it.each([
+    ['generate_document_async', { template: { id: 58057, data: {} } }],
+    ['generate_document_batch_async', { template: [{ id: 58057, data: {} }] }],
+  ])('refuses %s without the callback the API requires', async (tool, requestBody) => {
+    const result = await run(tool, { requestBody });
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain('requestBody.callback');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
 });
