@@ -91,7 +91,7 @@ You get an email the first time an application connects to a workspace. To see o
 - **Templates**: list, read, create, update, copy, import from PDF, validate, manage versions, browse the template library, list the fonts templates can use and open the template editor.
 - **Template builder**: `get_builder_guide`, `list_builder_tools` and `run_builder_tool` give the assistant the granular steps the PDF Generator API editor uses to build a template (add, change, move and remove components, pages and table rows; validate). The assistant does the work with its own model, so building a template this way spends none of your workspace's AI credits.
 - **Documents**: generate PDFs (one or in batches, synchronously or asynchronously), and list, read and delete generated documents.
-- **Forms**: create, import, update, share and delete forms.
+- **Forms**: list, read, create, import, update, share and delete forms, and read the form JSON schema.
 - **Conversion and PDF tools**: HTML and URL to PDF, PDF to image, watermark, encrypt, decrypt, optimize, add accessibility tags, extract and fill PDF form fields, QR codes.
 - **E-invoices**: UBL, CII, XRechnung and Factur-X.
 - **Workspaces**: list, create and delete.

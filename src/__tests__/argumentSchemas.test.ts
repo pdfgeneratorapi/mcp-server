@@ -65,6 +65,13 @@ describe('tool argument schemas', () => {
     ['generate_document', { requestBody: { template: { id: 58057, data: [{ name: 'Alex' }, { name: 'Sam' }] }, output: 'url' } }],
     ['open_editor', { templateId: 58057, requestBody: { data: { name: 'Alex' } } }],
     ['open_editor', { templateId: 58057, requestBody: { data: [{ name: 'Alex' }] } }],
+    ['convert_url_to_pdf', { requestBody: { url: 'https://example.test/report', wait_for_css: '#report-ready', wait_timeout: 10, on_wait_timeout: 'print' } }],
+    ['create_form', { requestBody: {
+      name: 'Order',
+      actions: [{ store_document: true }],
+      fields: [{ label: 'Size', name: 'size', type: 'select', required: true, default: 'Medium', subRows: [{ options: 'Small,Medium,Large' }] }],
+    } }],
+    ['get_forms', { search: 'Certificate', order_by: 'name', order_direction: 'asc' }],
   ])('lets a usual %s call through', async (tool, args) => {
     const result = await run(tool, args);
 

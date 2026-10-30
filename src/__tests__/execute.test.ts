@@ -695,7 +695,8 @@ describe('executeApiTool with form actions', () => {
 
   it.each(['create_form', 'update_form'])('sends every action of %s as given', async (toolName) => {
     mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: { response: {} } });
-    const args = { ...(toolName === 'update_form' ? { formId: 7 } : {}), requestBody: { name: 'Contact', template_id: 57782, actions } };
+    const fields = [{ label: 'Name', name: 'name', type: 'text', required: true }];
+    const args = { ...(toolName === 'update_form' ? { formId: 7 } : {}), requestBody: { name: 'Contact', template_id: 57782, actions, fields } };
 
     const result = await executeApiTool(toolName, toolDefinitionMap.get(toolName)!, args);
 

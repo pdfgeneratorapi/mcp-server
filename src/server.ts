@@ -64,6 +64,7 @@ const toolAnnotations: Record<string, { title: string; readOnlyHint?: boolean; d
     convert_html_to_pdf:                    { title: "Convert HTML to PDF",                 readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     convert_url_to_pdf:                     { title: "Convert URL to PDF",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     get_forms:                           { title: "List Forms",                          readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_form_schema:                     { title: "Get Form JSON Schema",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     create_form:                         { title: "Create Form",                         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     import_form:                         { title: "Import PDF as Form",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
     get_form:                            { title: "Get Form Details",                    readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
