@@ -5,10 +5,18 @@
 ### Added
 
 - `list_fonts` lists the fonts the workspace's templates can use, so a client picks a `fontFamily` instead of guessing one; an unknown font is drawn with Open Sans. Each font has its `id`, its name, the styles it has glyphs of its own for, and the Unicode blocks it has at least half of, in percent. `covers` keeps only the fonts that can draw every character of a text, such as `₹` or `✓`. Needs the API release with `GET /fonts` (PGA-4180); before it, the tool answers 404.
+- `get_form_schema` returns the form JSON schema, as `get_template_schema` does for templates. It needs no scope.
+- `convert_url_to_pdf` can wait for a page that keeps loading after its network settles, such as a single-page application: `wait_for_css` waits for an element (`wait_for_css_state`: `present` or `visible`), `wait_for_js` for an expression to be true, up to `wait_timeout` seconds, and `on_wait_timeout` either fails or prints the page as it is.
+- `get_forms` takes `search`, which matches a form's name or id, and sorts with `order_by` and `order_direction`.
+
+### Changed
+
+- `create_form` and `update_form` take every field type the API does: `select`, `multi-select`, `table`, `image` and `pdf` as well as text, numbers, dates and signatures. A field can have a `default`, a `description`, and `subRows`: the choices of a select field, or the columns of a table. The tools now refuse a form without a name, actions or fields, and a field without its label, name, type and `required`, as the API does. `import_form` no longer offers `fields`: an imported form's fields come from the PDF.
 
 ### Fixed
 
 - `update_template` no longer needs `name`. An update replaces only the top-level fields it sends, so `{"fontSubsetting": false}` changes that setting and keeps the stored name; the tool refused it before it reached the API. Needs the API release that accepts an update without a name (PGA-4225); before it, the API answers 422. `create_template` and `validate_template` still need a name.
+- `create_template`, `update_template` and `validate_template` take every page format the API does: A2, A3, A4, A5, letter, label and custom, where they took only A4, letter and custom and refused an A3 template before it reached the API. Any other size is custom with `width` and `height`. A layout needs `format`, `orientation` and all four `margins`, as the API already required; the tools now say so, and refuse a layout without them instead of passing on the API's 422. Page margins take `top` and `left` too, `rotation` and `emptyLabels` are whole numbers, and `components` points to `get_template_schema` for each `cls`'s fields. Needs the API release where A2 and A3 have a size of their own (PGA-4204); before it, an A2 or A3 layout sent without `width` and `height` gets A4's size.
 
 ## 5.2.1 — 2026-10-28
 

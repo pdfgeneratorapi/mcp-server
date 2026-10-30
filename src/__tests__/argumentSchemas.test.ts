@@ -65,10 +65,37 @@ describe('tool argument schemas', () => {
     ['generate_document', { requestBody: { template: { id: 58057, data: [{ name: 'Alex' }, { name: 'Sam' }] }, output: 'url' } }],
     ['open_editor', { templateId: 58057, requestBody: { data: { name: 'Alex' } } }],
     ['open_editor', { templateId: 58057, requestBody: { data: [{ name: 'Alex' }] } }],
+    ['convert_url_to_pdf', { requestBody: { url: 'https://example.test/report', wait_for_css: '#report-ready', wait_timeout: 10, on_wait_timeout: 'print' } }],
+    ['create_form', { requestBody: {
+      name: 'Order',
+      actions: [{ store_document: true }],
+      fields: [{ label: 'Size', name: 'size', type: 'select', required: true, default: 'Medium', subRows: [{ options: 'Small,Medium,Large' }] }],
+    } }],
+    ['get_forms', { search: 'Certificate', order_by: 'name', order_direction: 'asc' }],
   ])('lets a usual %s call through', async (tool, args) => {
     const result = await run(tool, args);
 
     expect(result.isError).toBeFalsy();
     expect(mockAxios).toHaveBeenCalledTimes(1);
+  });
+
+  const margins = { top: 1, right: 1, bottom: 1, left: 1 };
+
+  it.each([
+    ['A3', { format: 'A3', orientation: 'landscape', margins }],
+    ['a custom size', { format: 'custom', width: 10, height: 15, orientation: 'portrait', margins }],
+  ])('lets a template layout in %s through', async (_, layout) => {
+    const result = await run('create_template', { requestBody: { name: 'Poster', layout } });
+
+    expect(result.isError).toBeFalsy();
+    expect(mockAxios).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a template layout without the margins the API requires', async () => {
+    const result = await run('validate_template', { requestBody: { name: 'Poster', layout: { format: 'A4', orientation: 'portrait' } } });
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain('requestBody.layout.margins');
+    expect(mockAxios).not.toHaveBeenCalled();
   });
 });

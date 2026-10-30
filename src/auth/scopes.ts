@@ -20,6 +20,7 @@ const IMPLIED_ACTIONS: Record<string, string[]> = {
 export const TOOL_SCOPES: Record<string, string | null> = {
   get_status: null,
   get_template_schema: null,
+  get_form_schema: null,
   get_einvoice_schema: null,
   // The public template library: shared templates, no customer data.
   get_template_library: null,

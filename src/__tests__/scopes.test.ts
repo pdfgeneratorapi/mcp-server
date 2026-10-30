@@ -34,7 +34,7 @@ describe('the tool-to-scope map', () => {
     expect(requiredScope(tool)).toBe(scope);
   });
 
-  it.each(['get_status', 'get_template_schema', 'get_einvoice_schema'])('needs no scope for %s', (tool) => {
+  it.each(['get_status', 'get_template_schema', 'get_form_schema', 'get_einvoice_schema'])('needs no scope for %s', (tool) => {
     expect(requiredScope(tool)).toBeNull();
   });
 

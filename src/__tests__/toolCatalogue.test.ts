@@ -1,6 +1,7 @@
 /**
  * The tools are generated from the API spec and then edited by hand; this keeps them from drifting
- * from it again: every spec operation has one tool, with the same parameters and body fields.
+ * from it again: every spec operation has one tool, with the same parameters and body fields, and
+ * each field takes the same types and values.
  * docs/apiv4.json is a copy of docs/apiv4.json in the api repository, generated there from apiv4.yaml.
  */
 import { describe, it, expect } from '@jest/globals';
@@ -39,10 +40,50 @@ function fields(schema: any, prefix = ''): Set<string> {
   return found;
 }
 
+/**
+ * What each body field accepts, by path: its types, its values and the fields it requires. A
+ * field a union gives more than one shape keeps them all. The tools write OpenAPI's nullable as
+ * a "null" type, and were generated with integer written as number: to a client both are a JSON
+ * number, and the API turns down a fraction where it wants a whole one.
+ */
+function shapes(schema: any, prefix = '', found = new Map<string, Set<string>>()): Map<string, Set<string>> {
+  if (!schema || typeof schema !== 'object') return found;
+  for (const key of ['allOf', 'oneOf', 'anyOf']) {
+    for (const option of schema[key] ?? []) shapes(option, prefix, found);
+  }
+  const types = [...new Set([schema.type ?? []].flat().concat(schema.nullable ? ['null'] : []))]
+    .map((type) => (type === 'integer' ? 'number' : type))
+    .sort();
+  const shape = JSON.stringify({
+    types,
+    enum: schema.enum ? schema.enum.map(String).sort() : undefined,
+    required: schema.required ? [...schema.required].sort() : undefined,
+  });
+  found.set(prefix, (found.get(prefix) ?? new Set()).add(shape));
+  for (const [name, property] of Object.entries(schema.properties ?? {})) {
+    shapes(property, prefix ? `${prefix}.${name}` : name, found);
+  }
+  if (schema.items && typeof schema.items === 'object') shapes(schema.items, `${prefix}[]`, found);
+  return found;
+}
+
+/** Body fields whose tool and spec still differ, by tool and field, and how. */
+const KNOWN_DRIFT: Record<string, string> = {
+  'make_accessible options[]': 'The tool takes any option; the spec lists them.',
+  'make_accessible output': 'The tool leaves out url and viewer, which the API accepts.',
+  ...Object.fromEntries(
+    ['generate_document', 'generate_document_async', 'generate_document_batch', 'generate_document_batch_async'].flatMap((tool) => [
+      [`${tool} format`, 'The spec leaves out xlsx and zip, which the API accepts.'],
+      [`${tool} ${tool.includes('batch') ? 'template[]' : 'template'}.id`, 'The tool takes only a numeric template id, not a public one.'],
+    ]),
+  ),
+};
+
 interface Operation {
   key: string;
   parameters: string[];
   body: Set<string>;
+  schema: any;
 }
 
 const operations: Operation[] = Object.entries(spec.paths).flatMap(([path, item]: [string, any]) =>
@@ -56,7 +97,7 @@ const operations: Operation[] = Object.entries(spec.paths).flatMap(([path, item]
         .sort();
       const content = dereference(operation.requestBody)?.content ?? {};
       const schema = (Object.values(content)[0] as any)?.schema;
-      return { key: `${method.toUpperCase()} ${normalise(path)}`, parameters, body: fields(schema) };
+      return { key: `${method.toUpperCase()} ${normalise(path)}`, parameters, body: fields(schema), schema };
     }),
 );
 
@@ -101,5 +142,24 @@ describe('tool catalogue', () => {
     });
 
     expect(drifted).toEqual([]);
+  });
+
+  const drift = tools.flatMap(({ tool, key }) => {
+    const operation = operations.find((candidate) => candidate.key === key);
+    if (!operation?.schema) return [];
+    const own = shapes(tool.inputSchema.properties?.requestBody);
+    return [...shapes(operation.schema)].flatMap(([path, shape]) => {
+      const toolShape = own.get(path);
+      if (!toolShape || JSON.stringify([...toolShape].sort()) === JSON.stringify([...shape].sort())) return [];
+      return [{ field: `${tool.name} ${path || '(body)'}`, detail: `${[...toolShape].join(' or ')} != ${[...shape].join(' or ')}` }];
+    });
+  });
+
+  it('gives every body field the types, values and required fields of its operation', () => {
+    expect(drift.filter(({ field }) => !(field in KNOWN_DRIFT)).map(({ field, detail }) => `${field}: ${detail}`)).toEqual([]);
+  });
+
+  it('lists as known drift only fields that still drift', () => {
+    expect(Object.keys(KNOWN_DRIFT).filter((field) => !drift.some((drifted) => drifted.field === field))).toEqual([]);
   });
 });

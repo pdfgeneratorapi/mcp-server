@@ -669,7 +669,7 @@ describe('executeApiTool with nullable fields', () => {
     mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: { response: {} } });
     const requestBody = {
       name: 'Labels',
-      layout: { repeatLayout: null },
+      layout: { format: 'A4', orientation: 'portrait', margins: { top: 1, right: 1, bottom: 1, left: 1 }, repeatLayout: null },
       pages: [{ layout: null, backgroundImage: null }],
     };
 
@@ -695,7 +695,8 @@ describe('executeApiTool with form actions', () => {
 
   it.each(['create_form', 'update_form'])('sends every action of %s as given', async (toolName) => {
     mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: { response: {} } });
-    const args = { ...(toolName === 'update_form' ? { formId: 7 } : {}), requestBody: { name: 'Contact', template_id: 57782, actions } };
+    const fields = [{ label: 'Name', name: 'name', type: 'text', required: true }];
+    const args = { ...(toolName === 'update_form' ? { formId: 7 } : {}), requestBody: { name: 'Contact', template_id: 57782, actions, fields } };
 
     const result = await executeApiTool(toolName, toolDefinitionMap.get(toolName)!, args);
 
