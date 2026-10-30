@@ -669,7 +669,7 @@ describe('executeApiTool with nullable fields', () => {
     mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: { response: {} } });
     const requestBody = {
       name: 'Labels',
-      layout: { repeatLayout: null },
+      layout: { format: 'A4', orientation: 'portrait', margins: { top: 1, right: 1, bottom: 1, left: 1 }, repeatLayout: null },
       pages: [{ layout: null, backgroundImage: null }],
     };
 

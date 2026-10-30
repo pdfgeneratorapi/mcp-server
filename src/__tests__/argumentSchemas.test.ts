@@ -71,4 +71,24 @@ describe('tool argument schemas', () => {
     expect(result.isError).toBeFalsy();
     expect(mockAxios).toHaveBeenCalledTimes(1);
   });
+
+  const margins = { top: 1, right: 1, bottom: 1, left: 1 };
+
+  it.each([
+    ['A3', { format: 'A3', orientation: 'landscape', margins }],
+    ['a custom size', { format: 'custom', width: 10, height: 15, orientation: 'portrait', margins }],
+  ])('lets a template layout in %s through', async (_, layout) => {
+    const result = await run('create_template', { requestBody: { name: 'Poster', layout } });
+
+    expect(result.isError).toBeFalsy();
+    expect(mockAxios).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a template layout without the margins the API requires', async () => {
+    const result = await run('validate_template', { requestBody: { name: 'Poster', layout: { format: 'A4', orientation: 'portrait' } } });
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain('requestBody.layout.margins');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
 });
