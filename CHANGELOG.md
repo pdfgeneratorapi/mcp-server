@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- A page takes a background colour: `backgroundColor` on a page of `create_template`, `update_template` and `validate_template`, in hex (`#RRGGBB` or `#RGB`; empty or `null` for none). It fills every sheet the page runs onto, edge to edge, under everything on it, its background image included; on a sheet of labels it fills each label. A colour that is not hex is refused before it reaches the API. The template builder's `update_page` step sets it on one page or on every page without resending the template. Needs the API release with the page background colour; before it, the colour is not kept.
+
 ## 5.3.0 — 2026-11-02
 
 ### Added
