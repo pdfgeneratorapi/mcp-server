@@ -106,6 +106,23 @@ describe('tool argument schemas', () => {
     expect((mockAxios.mock.calls[0][0] as any).data.pages[0].backgroundColor).toBe('#336699');
   });
 
+  it.each(['#33669980', '#3698', 'rgb(51, 102, 153)', 'rgba(51, 102, 153, 0.5)'])(
+    'lets a page background colour carry an alpha, as %s',
+    async (color) => {
+      const result = await run('create_template', { requestBody: { name: 'Flyer', pages: [{ components: [], backgroundColor: color }] } });
+
+      expect(result.isError).toBeFalsy();
+      expect((mockAxios.mock.calls[0][0] as any).data.pages[0].backgroundColor).toBe(color);
+    }
+  );
+
+  it.each(['#12345', 'rgba(51, 102)'])('refuses %s as a page background colour', async (color) => {
+    const result = await run('create_template', { requestBody: { name: 'Flyer', pages: [{ components: [], backgroundColor: color }] } });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
   it('refuses a page background colour that is not hex', async () => {
     const result = await run('create_template', { requestBody: { name: 'Flyer', pages: [{ components: [], backgroundColor: 'red' }] } });
 

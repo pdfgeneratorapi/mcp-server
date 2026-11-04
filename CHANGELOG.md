@@ -5,6 +5,7 @@
 ### Added
 
 - A page takes a background colour: `backgroundColor` on a page of `create_template`, `update_template` and `validate_template`, in hex (`#RRGGBB` or `#RGB`; empty or `null` for none). It fills every sheet the page runs onto, edge to edge, under everything on it, its background image included; on a sheet of labels it fills each label. A colour that is not hex is refused before it reaches the API. The template builder's `update_page` step sets it on one page or on every page without resending the template. Needs the API release with the page background colour; before it, the colour is not kept.
+- A page background colour takes an alpha: `#RRGGBBAA`, `#RGBA`, `rgb()` or `rgba()`, as well as `#RRGGBB` and `#RGB`. A translucent one is lighter, the white of the paper showing through. `docs/apiv4.json` is the API's 4.0.35 spec. Components take an `opacity` and colours with an alpha too; `get_template_schema` and the builder guide describe them. Needs the API release with them; before it, an alpha is refused.
 
 ## 5.3.0 — 2026-11-02
 
