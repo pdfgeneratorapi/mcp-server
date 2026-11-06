@@ -21,6 +21,9 @@ const HTTP_UNAUTHORIZED = 401;
 /** The argument a call sets to get the API's response whole from a tool that summarizes it. */
 export const FULL_RESPONSE_ARGUMENT = 'full_response';
 
+/** Thrown by a tool's prepareRequestBody to refuse arguments its input schema cannot express. */
+export class InvalidArgumentsError extends Error {}
+
 // Headers a tool argument must never set: tools.ts is generated from the OpenAPI
 // document, so a header parameter could otherwise override credentials or routing.
 const FORBIDDEN_HEADERS = new Set([
@@ -111,7 +114,16 @@ export async function executeApiTool(
 
     // Handle request body if needed
     if (definition.requestBodyContentType && typeof validatedArgs['requestBody'] !== 'undefined') {
-        requestBodyData = validatedArgs['requestBody'];
+        try {
+            requestBodyData = definition.prepareRequestBody
+                ? definition.prepareRequestBody(validatedArgs['requestBody'])
+                : validatedArgs['requestBody'];
+        } catch (error: unknown) {
+            if (error instanceof InvalidArgumentsError) {
+                return { content: [{ type: 'text', text: `Invalid arguments for tool '${toolName}': ${error.message}` }], isError: true };
+            }
+            throw error;
+        }
         headers['content-type'] = definition.requestBodyContentType;
     }
 

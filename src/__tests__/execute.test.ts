@@ -16,7 +16,7 @@ jest.unstable_mockModule('axios', () => {
 });
 
 // Import after mocking
-const { executeApiTool } = await import('../execute.js');
+const { executeApiTool, InvalidArgumentsError } = await import('../execute.js');
 const { toolDefinitionMap } = await import('../tools.js');
 
 function makeTool(overrides: Partial<McpToolDefinition> = {}): McpToolDefinition {
@@ -879,6 +879,59 @@ describe('a tool that answers with images', () => {
     const result = await executeApiTool('testTool', makeTool(), {});
 
     expect((result.content as any[]).map(item => item.type)).toEqual(['text', 'resource']);
+  });
+});
+
+describe('a tool that prepares its request body', () => {
+  const ok = { status: 200, headers: { 'content-type': 'application/json' }, data: jsonBytes({ ok: true }) };
+
+  function preparingTool(prepareRequestBody: (body: Record<string, any>) => Record<string, any>) {
+    return makeTool({
+      method: 'post',
+      requestBodyContentType: 'application/json',
+      inputSchema: {
+        type: 'object',
+        properties: { requestBody: { type: 'object', properties: { pages: { type: 'string' } } } },
+      },
+      prepareRequestBody,
+    });
+  }
+
+  it('sends the body the tool completed', async () => {
+    mockAxios.mockResolvedValue(ok);
+
+    await executeApiTool('testTool', preparingTool(body => ({ ...body, output: 'file' })), { requestBody: { pages: '1' } });
+
+    expect((mockAxios.mock.calls[0][0] as any).data).toEqual({ pages: '1', output: 'file' });
+  });
+
+  it('refuses the call the tool refuses, before fetching a credential or reaching the API', async () => {
+    const auth = upstreamAuth('token');
+    const tool = preparingTool(() => {
+      throw new InvalidArgumentsError('pages covers 4 pages; at most 3 are shown.');
+    });
+
+    const result = await executeApiTool('testTool', tool, { requestBody: { pages: '1-4' } }, auth);
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{
+      type: 'text',
+      text: "Invalid arguments for tool 'testTool': pages covers 4 pages; at most 3 are shown.",
+    }]);
+    expect(mockAxios).not.toHaveBeenCalled();
+    expect(auth.getToken).not.toHaveBeenCalled();
+  });
+
+  it('reports any other failure of the tool as a tool error', async () => {
+    const tool = preparingTool(() => {
+      throw new Error('the tool broke');
+    });
+
+    const result = await executeApiTool('testTool', tool, { requestBody: { pages: '1' } });
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: 'text', text: 'the tool broke' }]);
+    expect(mockAxios).not.toHaveBeenCalled();
   });
 });
 
