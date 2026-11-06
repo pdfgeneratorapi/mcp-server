@@ -1,12 +1,55 @@
 /**
- * Page images: a client sees pages of a template in the chat, as images, in one call, to check
- * how a template looks while building it.
+ * Page images: a client sees pages of a template, or of a PDF, in the chat, as images, in one
+ * call, to check how a template looks while building it.
  */
-import type { McpToolDefinition } from './types.js';
+import type { JsonObject, McpToolDefinition } from './types.js';
+import { InvalidArgumentsError } from './execute.js';
 
 export const PREVIEW_TEMPLATE = 'preview_template';
+export const SHOW_PDF_PAGES = 'show_pdf_pages';
 
 const MAX_PAGES = 3;
+const DEFAULT_PAGES = '1';
+const DEFAULT_RESOLUTION = 100;
+
+const pages = {
+  type: 'string',
+  pattern: '^\\d+(-\\d+)?$',
+  default: DEFAULT_PAGES,
+  description: `One page, such as "2", or a range of up to ${MAX_PAGES} pages, such as "1-3".`,
+};
+
+const resolution = {
+  type: 'integer',
+  minimum: 72,
+  maximum: 150,
+  default: DEFAULT_RESOLUTION,
+  description: 'Resolution of the images, in DPI. A higher one shows more detail and costs more context.',
+};
+
+/**
+ * The PDF to image conversion charges for every page it renders, so a range longer than the
+ * pages shown is refused before it reaches the API.
+ */
+function pdfPagesAsImages(body: JsonObject): JsonObject {
+  const range = String(body.pages ?? DEFAULT_PAGES);
+  const [first, last = first] = range.split('-').map(Number);
+
+  if (first < 1 || last < first) {
+    throw new InvalidArgumentsError(`pages "${range}" is not a page or a range of pages, such as "2" or "1-3".`);
+  }
+  if (last - first + 1 > MAX_PAGES) {
+    throw new InvalidArgumentsError(`pages "${range}" covers ${last - first + 1} pages; at most ${MAX_PAGES} are shown at once.`);
+  }
+
+  return {
+    ...body,
+    pages: range,
+    resolution: body.resolution ?? DEFAULT_RESOLUTION,
+    format: 'png',
+    output: 'file',
+  };
+}
 
 const templateData = {
   description: 'Data for the template\'s placeholders: an object, or an array of objects for one copy of the template each.',
@@ -43,19 +86,8 @@ export const previewToolDefinitionMap: Map<string, McpToolDefinition> = new Map(
                 data: templateData,
               },
             },
-            pages: {
-              type: 'string',
-              pattern: '^\\d+(-\\d+)?$',
-              default: '1',
-              description: `One page, such as "2", or a range of up to ${MAX_PAGES} pages, such as "1-3".`,
-            },
-            resolution: {
-              type: 'integer',
-              minimum: 72,
-              maximum: 150,
-              default: 100,
-              description: 'Resolution of the images, in DPI. A higher one shows more detail and costs more context.',
-            },
+            pages,
+            resolution,
           },
           required: ['template'],
         },
@@ -67,5 +99,30 @@ export const previewToolDefinitionMap: Map<string, McpToolDefinition> = new Map(
     executionParameters: [],
     requestBodyContentType: 'application/json',
     imageResponse: true,
+  }],
+  [SHOW_PDF_PAGES, {
+    name: SHOW_PDF_PAGES,
+    description: `Shows up to ${MAX_PAGES} pages of a PDF as PNG images in the chat, from a public URL or base64. convert_pdf_to_image answers with a zip file instead. It is charged as a PDF to image conversion, for each page shown.`,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        requestBody: {
+          type: 'object',
+          properties: {
+            file_url: { type: 'string', description: 'Public HTTPS URL of the PDF. Give either file_url or file_base64.' },
+            file_base64: { type: 'string', description: 'The PDF, base64 encoded. Give either file_url or file_base64.' },
+            pages,
+            resolution,
+          },
+        },
+      },
+      required: ['requestBody'],
+    },
+    method: 'post',
+    pathTemplate: '/conversion/pdf2image',
+    executionParameters: [],
+    requestBodyContentType: 'application/json',
+    imageResponse: true,
+    prepareRequestBody: pdfPagesAsImages,
   }],
 ]);

@@ -89,6 +89,7 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   convert_url_to_pdf: 'pdf:write',
   generate_qr_code: 'pdf:write',
   convert_pdf_to_image: 'pdf:write',
+  show_pdf_pages: 'pdf:write',
 
   create_einvoice: 'einvoice:write',
   create_xrechnung_einvoice: 'einvoice:write',
