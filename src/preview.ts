@@ -102,7 +102,7 @@ export const previewToolDefinitionMap: Map<string, McpToolDefinition> = new Map(
   }],
   [SHOW_PDF_PAGES, {
     name: SHOW_PDF_PAGES,
-    description: `Shows up to ${MAX_PAGES} pages of a PDF as PNG images in the chat, from a public URL or base64. convert_pdf_to_image answers with a zip file instead. It is charged as a PDF to image conversion, for each page shown.`,
+    description: `Shows up to ${MAX_PAGES} pages of a PDF as PNG images in the chat, from a public URL or base64. convert_pdf_to_image answers with a zip file instead. It is charged as a PDF to image conversion, for each page shown. It is for a PDF you already have: to look at a template, call ${PREVIEW_TEMPLATE}, which is free, instead of generating a document first.`,
     inputSchema: {
       type: 'object',
       properties: {
