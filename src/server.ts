@@ -91,6 +91,7 @@ const toolAnnotations: Record<string, { title: string; readOnlyHint?: boolean; d
     list_builder_tools:                  { title: "List Template Builder Tools",        readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
     // Changes are saved as template versions, so a removed component can be restored.
     run_builder_tool:                    { title: "Run Template Builder Tool",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    preview_template:                    { title: "Preview Template Pages",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
 };
 
 /**
@@ -140,7 +141,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         },
         {
             capabilities: { tools: {}, prompts: {} },
-            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with get_templates, then generate documents with generate_document. To build or restyle a template step by step, or change a few of its components without resending it, read get_builder_guide, list the steps with list_builder_tools and apply them with run_builder_tool. Take every fontFamily from list_fonts. The connection acts in the workspace the user chose when connecting, with the permissions they granted; tools outside those permissions are not listed.",
+            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with get_templates, then generate documents with generate_document. To build or restyle a template step by step, or change a few of its components without resending it, read get_builder_guide, list the steps with list_builder_tools and apply them with run_builder_tool. To see how a template looks, saved or not, call preview_template: it shows up to 3 of its pages as images. Take every fontFamily from list_fonts. The connection acts in the workspace the user chose when connecting, with the permissions they granted; tools outside those permissions are not listed.",
         }
     );
 
