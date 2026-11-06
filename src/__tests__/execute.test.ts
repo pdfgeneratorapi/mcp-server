@@ -1,5 +1,9 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { crc32 } from 'node:zlib';
 import type { McpToolDefinition } from '../types.js';
+import { readZip } from '../zip.js';
 
 // Mock axios before importing execute
 const mockAxios = jest.fn() as jest.Mock<any>;
@@ -12,7 +16,7 @@ jest.unstable_mockModule('axios', () => {
 });
 
 // Import after mocking
-const { executeApiTool } = await import('../execute.js');
+const { executeApiTool, InvalidArgumentsError } = await import('../execute.js');
 const { toolDefinitionMap } = await import('../tools.js');
 
 function makeTool(overrides: Partial<McpToolDefinition> = {}): McpToolDefinition {
@@ -799,4 +803,174 @@ describe('executeApiTool with schema defaults', () => {
     expect((tool.inputSchema as any).properties.requestBody.properties.output.default).toBe('base64');
   });
 });
+
+describe('a tool that answers with images', () => {
+  const tool = makeTool({ imageResponse: true });
+  const pagesZip = () => readFileSync(resolve(process.cwd(), 'src/__tests__/fixtures/pdf-services-pages.zip'));
+
+  it('shows a PNG as an image', async () => {
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.from('page one')]);
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'image/png' }, data: toArrayBuffer(png) });
+
+    const result = await executeApiTool('testTool', tool, {});
+
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toEqual([
+      { type: 'text', text: 'API Response (Status: 200): 1 image' },
+      { type: 'image', data: png.toString('base64'), mimeType: 'image/png' },
+    ]);
+  });
+
+  it('shows every image of a zip, in order', async () => {
+    const zip = pagesZip();
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/zip' }, data: toArrayBuffer(zip) });
+
+    const result = await executeApiTool('testTool', tool, {});
+
+    const [first, second] = readZip(zip);
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toEqual([
+      { type: 'text', text: 'API Response (Status: 200): 2 images' },
+      { type: 'image', data: first.data.toString('base64'), mimeType: 'image/png' },
+      { type: 'image', data: second.data.toString('base64'), mimeType: 'image/png' },
+    ]);
+  });
+
+  it('leaves out what in a zip is not an image', async () => {
+    const zip = zipOf({ 'page_001.png': Buffer.from('page'), 'notes.txt': Buffer.from('not a page') });
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/zip' }, data: toArrayBuffer(zip) });
+
+    const result = await executeApiTool('testTool', tool, {});
+
+    expect(result.content).toEqual([
+      { type: 'text', text: 'API Response (Status: 200): 1 image' },
+      { type: 'image', data: Buffer.from('page').toString('base64'), mimeType: 'image/png' },
+    ]);
+  });
+
+  it('says so when the zip cannot be read', async () => {
+    mockAxios.mockResolvedValue({
+      status: 200,
+      headers: { 'content-type': 'application/zip' },
+      data: toArrayBuffer(Buffer.from('not a zip')),
+    });
+
+    const result = await executeApiTool('testTool', tool, {});
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{
+      type: 'text',
+      text: 'The API answered with a zip that could not be read: The data is not a zip archive.',
+    }]);
+  });
+
+  it('still answers JSON as text', async () => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: jsonBytes({ ok: true }) });
+
+    const result = await executeApiTool('testTool', tool, {});
+
+    expect(result.content).toEqual([{ type: 'text', text: 'API Response (Status: 200):\n{\n  "ok": true\n}' }]);
+  });
+
+  it('keeps an image an embedded file for a tool that does not answer with images', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'image/png' }, data: toArrayBuffer(png) });
+
+    const result = await executeApiTool('testTool', makeTool(), {});
+
+    expect((result.content as any[]).map(item => item.type)).toEqual(['text', 'resource']);
+  });
+});
+
+describe('a tool that prepares its request body', () => {
+  const ok = { status: 200, headers: { 'content-type': 'application/json' }, data: jsonBytes({ ok: true }) };
+
+  function preparingTool(prepareRequestBody: (body: Record<string, any>) => Record<string, any>) {
+    return makeTool({
+      method: 'post',
+      requestBodyContentType: 'application/json',
+      inputSchema: {
+        type: 'object',
+        properties: { requestBody: { type: 'object', properties: { pages: { type: 'string' } } } },
+      },
+      prepareRequestBody,
+    });
+  }
+
+  it('sends the body the tool completed', async () => {
+    mockAxios.mockResolvedValue(ok);
+
+    await executeApiTool('testTool', preparingTool(body => ({ ...body, output: 'file' })), { requestBody: { pages: '1' } });
+
+    expect((mockAxios.mock.calls[0][0] as any).data).toEqual({ pages: '1', output: 'file' });
+  });
+
+  it('refuses the call the tool refuses, before fetching a credential or reaching the API', async () => {
+    const auth = upstreamAuth('token');
+    const tool = preparingTool(() => {
+      throw new InvalidArgumentsError('pages covers 4 pages; at most 3 are shown.');
+    });
+
+    const result = await executeApiTool('testTool', tool, { requestBody: { pages: '1-4' } }, auth);
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{
+      type: 'text',
+      text: "Invalid arguments for tool 'testTool': pages covers 4 pages; at most 3 are shown.",
+    }]);
+    expect(mockAxios).not.toHaveBeenCalled();
+    expect(auth.getToken).not.toHaveBeenCalled();
+  });
+
+  it('reports any other failure of the tool as a tool error', async () => {
+    const tool = preparingTool(() => {
+      throw new Error('the tool broke');
+    });
+
+    const result = await executeApiTool('testTool', tool, { requestBody: { pages: '1' } });
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: 'text', text: 'the tool broke' }]);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+});
+
+/** A zip of stored entries, laid out the plain way. */
+function zipOf(files: Record<string, Buffer>): Buffer {
+  const parts: Buffer[] = [];
+  const directory: Buffer[] = [];
+  let offset = 0;
+
+  for (const [fileName, data] of Object.entries(files)) {
+    const name = Buffer.from(fileName);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt32LE(crc32(data), 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt32LE(crc32(data), 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+
+    parts.push(local, name, data);
+    directory.push(central, name);
+    offset += local.length + name.length + data.length;
+  }
+
+  const centralDirectory = Buffer.concat(directory);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(directory.length / 2, 8);
+  end.writeUInt16LE(directory.length / 2, 10);
+  end.writeUInt32LE(centralDirectory.length, 12);
+  end.writeUInt32LE(offset, 16);
+
+  return Buffer.concat([...parts, centralDirectory, end]);
+}
 

@@ -1,10 +1,11 @@
 import { z, ZodError } from 'zod';
 import { jsonSchemaToZod } from 'json-schema-to-zod';
 import axios, { type AxiosRequestConfig, type AxiosError } from 'axios';
-import type { CallToolResult } from '@modelcontextprotocol/server';
+import type { CallToolResult, ImageContent } from '@modelcontextprotocol/server';
 import type { McpToolDefinition, JsonObject } from './types.js';
 import { API_BASE_URL } from './config.js';
 import { log } from './logger.js';
+import { readZip, ZipError } from './zip.js';
 
 /**
  * How a tool call obtains the credential for the API. It is asked only once the
@@ -19,6 +20,9 @@ const HTTP_UNAUTHORIZED = 401;
 
 /** The argument a call sets to get the API's response whole from a tool that summarizes it. */
 export const FULL_RESPONSE_ARGUMENT = 'full_response';
+
+/** Thrown by a tool's prepareRequestBody to refuse arguments its input schema cannot express. */
+export class InvalidArgumentsError extends Error {}
 
 // Headers a tool argument must never set: tools.ts is generated from the OpenAPI
 // document, so a header parameter could otherwise override credentials or routing.
@@ -110,7 +114,16 @@ export async function executeApiTool(
 
     // Handle request body if needed
     if (definition.requestBodyContentType && typeof validatedArgs['requestBody'] !== 'undefined') {
-        requestBodyData = validatedArgs['requestBody'];
+        try {
+            requestBodyData = definition.prepareRequestBody
+                ? definition.prepareRequestBody(validatedArgs['requestBody'])
+                : validatedArgs['requestBody'];
+        } catch (error: unknown) {
+            if (error instanceof InvalidArgumentsError) {
+                return { content: [{ type: 'text', text: `Invalid arguments for tool '${toolName}': ${error.message}` }], isError: true };
+            }
+            throw error;
+        }
         headers['content-type'] = definition.requestBodyContentType;
     }
 
@@ -146,7 +159,13 @@ export async function executeApiTool(
 
     const summarize = validatedArgs[FULL_RESPONSE_ARGUMENT] === true ? undefined : definition.summarizeResponse;
 
-    return formatResponse(response.status, response.headers as Record<string, unknown>, response.data, summarize);
+    return formatResponse(
+        response.status,
+        response.headers as Record<string, unknown>,
+        response.data,
+        summarize,
+        definition.imageResponse,
+    );
 
   } catch (error: unknown) {
     // Handle errors during execution
@@ -182,14 +201,15 @@ const TEXT_CONTENT_TYPES = [/^text\//, /json/, /xml/, /javascript/, /x-www-form-
 
 /**
  * Turns an API response into tool content: JSON pretty-printed, and summarized when the tool
- * summarizes it, text decoded, and any other body (PDFs, images) returned byte for byte as an
- * embedded resource.
+ * summarizes it, text decoded, images shown as images when the tool answers with them, and any
+ * other body (PDFs, images) returned byte for byte as an embedded resource.
  */
 function formatResponse(
     status: number,
     headers: Record<string, unknown>,
     data: unknown,
-    summarize?: (body: JsonObject) => JsonObject
+    summarize?: (body: JsonObject) => JsonObject,
+    images?: boolean
 ): CallToolResult {
     const contentType = String(headers['content-type'] ?? '').toLowerCase();
     const body = toBuffer(data);
@@ -217,6 +237,11 @@ function formatResponse(
     }
 
     const mimeType = contentType.split(';')[0].trim();
+
+    if (images && (mimeType.startsWith('image/') || mimeType === ZIP_CONTENT_TYPE)) {
+        return imageResult(status, mimeType, body);
+    }
+
     const filename = filenameOf(headers['content-disposition']) ?? 'document';
 
     return {
@@ -225,6 +250,43 @@ function formatResponse(
             { type: 'resource', resource: { uri: `file:///${encodeURIComponent(filename)}`, mimeType, blob: body.toString('base64') } },
         ],
     };
+}
+
+const ZIP_CONTENT_TYPE = 'application/zip';
+
+const IMAGE_TYPES_BY_EXTENSION: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+};
+
+/**
+ * An image, or a zip of images, as image blocks the client can show: one per image, in the
+ * order the zip lists them. Anything in the zip that is not an image is left out.
+ */
+function imageResult(status: number, mimeType: string, body: Buffer): CallToolResult {
+    let images: ImageContent[];
+
+    if (mimeType === ZIP_CONTENT_TYPE) {
+        try {
+            images = readZip(body).flatMap(entry => {
+                const type = IMAGE_TYPES_BY_EXTENSION[entry.name.split('.').pop()?.toLowerCase() ?? ''];
+
+                return type ? [{ type: 'image' as const, data: entry.data.toString('base64'), mimeType: type }] : [];
+            });
+        } catch (error: unknown) {
+            if (error instanceof ZipError) {
+                throw new Error(`The API answered with a zip that could not be read: ${error.message}`);
+            }
+            throw error;
+        }
+    } else {
+        images = [{ type: 'image', data: body.toString('base64'), mimeType }];
+    }
+
+    const count = images.length === 1 ? '1 image' : `${images.length} images`;
+
+    return { content: [{ type: 'text', text: `API Response (Status: ${status}): ${count}` }, ...images] };
 }
 
 function toBuffer(data: unknown): Buffer | null {

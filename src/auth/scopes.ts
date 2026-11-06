@@ -57,6 +57,8 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   store_document: 'documents:write',
   // Mints a link to view, and sign, a stored document.
   generate_viewer_url: 'documents:write',
+  // Generates the template like generate_document, stamped as a preview and stored nowhere.
+  preview_template: 'documents:write',
   delete_document: 'documents:delete',
 
   get_workspaces: 'workspaces:read',
@@ -87,6 +89,7 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   convert_url_to_pdf: 'pdf:write',
   generate_qr_code: 'pdf:write',
   convert_pdf_to_image: 'pdf:write',
+  show_pdf_pages: 'pdf:write',
 
   create_einvoice: 'einvoice:write',
   create_xrechnung_einvoice: 'einvoice:write',
