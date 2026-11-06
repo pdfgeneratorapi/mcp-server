@@ -18,4 +18,6 @@ export interface McpToolDefinition {
     baseUrl?: string;
     /** Shortens the JSON response, unless the call asks for the full response. */
     summarizeResponse?: (body: JsonObject) => JsonObject;
+    /** Shows an image, or each image of a zip, as an image block instead of an embedded file. */
+    imageResponse?: boolean;
 }

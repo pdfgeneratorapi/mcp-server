@@ -1,5 +1,9 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { crc32 } from 'node:zlib';
 import type { McpToolDefinition } from '../types.js';
+import { readZip } from '../zip.js';
 
 // Mock axios before importing execute
 const mockAxios = jest.fn() as jest.Mock<any>;
@@ -799,4 +803,121 @@ describe('executeApiTool with schema defaults', () => {
     expect((tool.inputSchema as any).properties.requestBody.properties.output.default).toBe('base64');
   });
 });
+
+describe('a tool that answers with images', () => {
+  const tool = makeTool({ imageResponse: true });
+  const pagesZip = () => readFileSync(resolve(process.cwd(), 'src/__tests__/fixtures/pdf-services-pages.zip'));
+
+  it('shows a PNG as an image', async () => {
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.from('page one')]);
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'image/png' }, data: toArrayBuffer(png) });
+
+    const result = await executeApiTool('testTool', tool, {});
+
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toEqual([
+      { type: 'text', text: 'API Response (Status: 200): 1 image' },
+      { type: 'image', data: png.toString('base64'), mimeType: 'image/png' },
+    ]);
+  });
+
+  it('shows every image of a zip, in order', async () => {
+    const zip = pagesZip();
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/zip' }, data: toArrayBuffer(zip) });
+
+    const result = await executeApiTool('testTool', tool, {});
+
+    const [first, second] = readZip(zip);
+    expect(result.isError).toBeFalsy();
+    expect(result.content).toEqual([
+      { type: 'text', text: 'API Response (Status: 200): 2 images' },
+      { type: 'image', data: first.data.toString('base64'), mimeType: 'image/png' },
+      { type: 'image', data: second.data.toString('base64'), mimeType: 'image/png' },
+    ]);
+  });
+
+  it('leaves out what in a zip is not an image', async () => {
+    const zip = zipOf({ 'page_001.png': Buffer.from('page'), 'notes.txt': Buffer.from('not a page') });
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/zip' }, data: toArrayBuffer(zip) });
+
+    const result = await executeApiTool('testTool', tool, {});
+
+    expect(result.content).toEqual([
+      { type: 'text', text: 'API Response (Status: 200): 1 image' },
+      { type: 'image', data: Buffer.from('page').toString('base64'), mimeType: 'image/png' },
+    ]);
+  });
+
+  it('says so when the zip cannot be read', async () => {
+    mockAxios.mockResolvedValue({
+      status: 200,
+      headers: { 'content-type': 'application/zip' },
+      data: toArrayBuffer(Buffer.from('not a zip')),
+    });
+
+    const result = await executeApiTool('testTool', tool, {});
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{
+      type: 'text',
+      text: 'The API answered with a zip that could not be read: The data is not a zip archive.',
+    }]);
+  });
+
+  it('still answers JSON as text', async () => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: jsonBytes({ ok: true }) });
+
+    const result = await executeApiTool('testTool', tool, {});
+
+    expect(result.content).toEqual([{ type: 'text', text: 'API Response (Status: 200):\n{\n  "ok": true\n}' }]);
+  });
+
+  it('keeps an image an embedded file for a tool that does not answer with images', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'image/png' }, data: toArrayBuffer(png) });
+
+    const result = await executeApiTool('testTool', makeTool(), {});
+
+    expect((result.content as any[]).map(item => item.type)).toEqual(['text', 'resource']);
+  });
+});
+
+/** A zip of stored entries, laid out the plain way. */
+function zipOf(files: Record<string, Buffer>): Buffer {
+  const parts: Buffer[] = [];
+  const directory: Buffer[] = [];
+  let offset = 0;
+
+  for (const [fileName, data] of Object.entries(files)) {
+    const name = Buffer.from(fileName);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt32LE(crc32(data), 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt32LE(crc32(data), 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+
+    parts.push(local, name, data);
+    directory.push(central, name);
+    offset += local.length + name.length + data.length;
+  }
+
+  const centralDirectory = Buffer.concat(directory);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(directory.length / 2, 8);
+  end.writeUInt16LE(directory.length / 2, 10);
+  end.writeUInt32LE(centralDirectory.length, 12);
+  end.writeUInt32LE(offset, 16);
+
+  return Buffer.concat([...parts, centralDirectory, end]);
+}
 
