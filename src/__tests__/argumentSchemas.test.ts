@@ -131,6 +131,21 @@ describe('tool argument schemas', () => {
     expect(mockAxios).not.toHaveBeenCalled();
   });
 
+  it.each(['create_template', 'update_template', 'validate_template'])('lets %s say how a page background image fits the page', async (tool) => {
+    const result = await run(tool, { templateId: 1, requestBody: { name: 'Flyer', pages: [{ components: [], backgroundImage: 'https://example.com/bg.svg', backgroundImageFit: 'contain' }] } });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data.pages[0].backgroundImageFit).toBe('contain');
+  });
+
+  it('refuses a page background image fit that is not one of the three', async () => {
+    const result = await run('create_template', { requestBody: { name: 'Flyer', pages: [{ components: [], backgroundImageFit: 'tile' }] } });
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain('requestBody.pages.0.backgroundImageFit');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
   it('sends a URL to PDF conversion with only the URL, for the API to fill in its defaults', async () => {
     const result = await run('convert_url_to_pdf', { requestBody: { url: 'https://example.test/report' } });
 
