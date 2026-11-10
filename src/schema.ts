@@ -116,8 +116,11 @@ export function simplifySchemaForOpenAI(schema: any): any {
     // tool-registration time (assertNoEmptyStringEnums). OpenAPI encodes a "no filter /
     // return all" option as "" (e.g. get_templates.access); omitting the parameter
     // expresses the same intent, so the field simply becomes optional.
+    // Also strip the values of the types a type array lost above: a nullable enum lists
+    // null, and Gemini takes only string enum values. Arguments are still validated
+    // against the tool definition, so null stays accepted.
     if (Array.isArray(simplified.enum)) {
-        simplified.enum = simplified.enum.filter((value: unknown) => value !== '');
+        simplified.enum = simplified.enum.filter((value: unknown) => value !== '' && isOfType(value, simplified.type));
         if (simplified.enum.length === 0) {
             delete simplified.enum;
         }
@@ -139,6 +142,17 @@ export function simplifySchemaForOpenAI(schema: any): any {
     delete simplified.format; // OpenAI doesn't like custom formats
 
     return simplified;
+}
+
+function isOfType(value: unknown, type: unknown): boolean {
+    switch (type) {
+        case 'string': return typeof value === 'string';
+        case 'number': return typeof value === 'number';
+        case 'integer': return Number.isInteger(value);
+        case 'boolean': return typeof value === 'boolean';
+        case 'null': return value === null;
+        default: return true;
+    }
 }
 
 function isObjectSchema(schema: any): boolean {

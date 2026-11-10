@@ -138,8 +138,16 @@ describe('tool argument schemas', () => {
     expect((mockAxios.mock.calls[0][0] as any).data.pages[0].backgroundImageFit).toBe('contain');
   });
 
-  it('refuses a page background image fit that is not one of the three', async () => {
-    const result = await run('create_template', { requestBody: { name: 'Flyer', pages: [{ components: [], backgroundImageFit: 'tile' }] } });
+  // get_template answers null for a page with no fit, and a client sends the page back as it got it.
+  it.each(['create_template', 'update_template', 'validate_template'])('lets %s send a page background image fit of null', async (tool) => {
+    const result = await run(tool, { templateId: 1, requestBody: { name: 'Flyer', pages: [{ components: [], backgroundImage: 'https://example.com/bg.svg', backgroundImageFit: null }] } });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data.pages[0].backgroundImageFit).toBeNull();
+  });
+
+  it.each(['create_template', 'update_template', 'validate_template'])('refuses a page background image fit in %s that is not one of the three', async (tool) => {
+    const result = await run(tool, { templateId: 1, requestBody: { name: 'Flyer', pages: [{ components: [], backgroundImageFit: 'tile' }] } });
 
     expect(result.isError).toBe(true);
     expect((result.content[0] as { text: string }).text).toContain('requestBody.pages.0.backgroundImageFit');
