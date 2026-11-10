@@ -154,11 +154,11 @@ describe('tool argument schemas', () => {
     expect(mockAxios).not.toHaveBeenCalled();
   });
 
-  it('lets open_editor open the editor in Portuguese', async () => {
-    const result = await run('open_editor', { templateId: 58057, requestBody: { data: { name: 'Alex' }, language: 'pt' } });
+  it.each([['Japanese', 'ja'], ['Portuguese', 'pt']])('lets open_editor open the editor in %s', async (_, language) => {
+    const result = await run('open_editor', { templateId: 58057, requestBody: { data: { name: 'Alex' }, language } });
 
     expect(result.isError).toBeFalsy();
-    expect((mockAxios.mock.calls[0][0] as any).data.language).toBe('pt');
+    expect((mockAxios.mock.calls[0][0] as any).data.language).toBe(language);
   });
 
   it('refuses an editor language the editor does not have', async () => {
