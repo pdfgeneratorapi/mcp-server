@@ -503,6 +503,26 @@ describe('nullable type arrays', () => {
     expect(simplifySchemaForOpenAI({ type: ['null'] })).toEqual({ type: 'null' });
   });
 
+  it('drops null from the enum of a nullable string, served as a string', () => {
+    expect(simplifySchemaForOpenAI({ type: ['string', 'null'], enum: ['stretch', 'contain', 'cover', null] }))
+      .toEqual({ type: 'string', enum: ['stretch', 'contain', 'cover'] });
+  });
+
+  it('drops a null default along with the null enum value', () => {
+    expect(simplifySchemaForOpenAI({ type: ['string', 'null'], enum: ['stretch', null], default: null }))
+      .toEqual({ type: 'string', enum: ['stretch'] });
+  });
+
+  it('drops the enum values of the types it leaves out', () => {
+    expect(simplifySchemaForOpenAI({ type: ['string', 'number', 'null'], enum: ['auto', 1, 2, null] }))
+      .toEqual({ type: 'string', enum: ['auto'] });
+  });
+
+  it('keeps an enum whose values are all of its type', () => {
+    expect(simplifySchemaForOpenAI({ type: 'integer', enum: [72, 150, 300] }))
+      .toEqual({ type: 'integer', enum: [72, 150, 300] });
+  });
+
   it('reaches nullable fields inside properties and array items', () => {
     const result = simplifySchemaForOpenAI({
       type: 'object',
@@ -541,6 +561,31 @@ describe('tool schemas use one type per field', () => {
     const offenders: string[] = [];
     for (const [name, def] of toolDefinitionMap) {
       collectTypeArrays(simplifySchemaForOpenAI(def.inputSchema), name, offenders);
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  // Gemini takes only string enum values, and a nullable enum lists null.
+  function collectForeignEnumValues(node: any, path: string, found: string[]): string[] {
+    if (!node || typeof node !== 'object') return found;
+    if (Array.isArray(node)) {
+      node.forEach((item, index) => collectForeignEnumValues(item, `${path}[${index}]`, found));
+      return found;
+    }
+    if (Array.isArray(node.enum) && typeof node.type === 'string') {
+      for (const value of node.enum) {
+        const valueType = value === null ? 'null' : Number.isInteger(value) && node.type === 'integer' ? 'integer' : typeof value;
+        if (valueType !== node.type) found.push(`${path}: ${JSON.stringify(value)} in a ${node.type} enum`);
+      }
+    }
+    for (const [key, value] of Object.entries(node)) collectForeignEnumValues(value, `${path}.${key}`, found);
+    return found;
+  }
+
+  it('no sanitized tool schema has an enum value of another type than its field', () => {
+    const offenders: string[] = [];
+    for (const [name, def] of toolDefinitionMap) {
+      collectForeignEnumValues(simplifySchemaForOpenAI(def.inputSchema), name, offenders);
     }
     expect(offenders).toEqual([]);
   });
