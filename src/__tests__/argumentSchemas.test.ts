@@ -154,6 +154,21 @@ describe('tool argument schemas', () => {
     expect(mockAxios).not.toHaveBeenCalled();
   });
 
+  it('lets open_editor open the editor in Portuguese', async () => {
+    const result = await run('open_editor', { templateId: 58057, requestBody: { data: { name: 'Alex' }, language: 'pt' } });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data.language).toBe('pt');
+  });
+
+  it('refuses an editor language the editor does not have', async () => {
+    const result = await run('open_editor', { templateId: 58057, requestBody: { data: { name: 'Alex' }, language: 'xx' } });
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain('requestBody.language');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
   it('sends a URL to PDF conversion with only the URL, for the API to fill in its defaults', async () => {
     const result = await run('convert_url_to_pdf', { requestBody: { url: 'https://example.test/report' } });
 
