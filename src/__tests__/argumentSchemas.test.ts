@@ -1,4 +1,5 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { createRequire } from 'node:module';
 
 const mockAxios = jest.fn() as jest.Mock<any>;
 jest.unstable_mockModule('axios', () => ({
@@ -7,6 +8,8 @@ jest.unstable_mockModule('axios', () => ({
 }));
 
 const { executeApiTool } = await import('../execute.js');
+/** The real client, to see the query string it would send for a request the test captured. */
+const realAxios = createRequire(import.meta.url)('axios');
 const { catalogue } = await import('../catalogue.js');
 
 const ok = { status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"response":{}}') };
@@ -273,12 +276,14 @@ describe('tool argument schemas', () => {
     const config = mockAxios.mock.calls[0][0] as any;
     expect(config.url).toMatch(/\/templates\/library\/items$/);
     expect(config.params).toEqual({ ids: ['invoice', 'quote'], images: 'omit' });
+    expect(realAxios.getUri(config)).toBe(`${config.url}?ids%5B%5D=invoice&ids%5B%5D=quote&images=omit`);
   });
 
   it.each([
     ['no id', { ids: [] }],
     ['more than 5 ids', { ids: ['a', 'b', 'c', 'd', 'e', 'f'] }],
     ['the ids as one string', { ids: 'invoice,quote' }],
+    ['an id given twice', { ids: ['invoice', 'invoice'] }],
     ['an images value the API does not take', { ids: ['invoice'], images: 'thumbnails' }],
   ])('refuses %s for get_template_library_items before it reaches the API', async (_, args) => {
     const result = await run('get_template_library_items', args);
