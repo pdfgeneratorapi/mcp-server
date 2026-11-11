@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 5.4.0 — 2026-11-11
 
 ### Added
 
@@ -10,6 +10,7 @@
 - `show_pdf_pages` shows up to 3 pages of a PDF, from a public URL or base64, as PNG images in the chat, where `convert_pdf_to_image` answers with a zip file. It takes `pages` and `resolution` as `preview_template` does, is charged as a PDF to image conversion for each page shown, and refuses a range of more than 3 pages before it reaches the API. It needs `pdf:write`.
 - A page says how its background image covers the page: `backgroundImageFit` on a page of `create_template`, `update_template` and `validate_template`, `stretch` (the default, as when none is set), `contain` (fitted inside the page, keeping its proportions) or `cover` (filling the page, keeping its proportions, what overflows cut off), centred. A background image can be an SVG. A fit that is not one of the three is refused before it reaches the API. The template builder's `update_page` step sets it too. Needs the API release with it; before it, the fit is not kept.
 - The server instructions and `show_pdf_pages` point clients at `preview_template` to look at a template, and tell them not to generate a document for that: `generate_document` uses credits, and `output: url` stores the document for 30 days.
+- `open_editor` opens the editor in Japanese (`ja`) and Portuguese (`pt`) too, so its `language` takes the eight languages the API's spec lists: `en`, `et`, `cs`, `sk`, `ru`, `de`, `ja` and `pt`. Before, the tool refused them before they reached the API.
 
 ## 5.3.0 — 2026-11-02
 
