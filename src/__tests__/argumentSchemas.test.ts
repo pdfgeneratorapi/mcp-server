@@ -253,4 +253,37 @@ describe('tool argument schemas', () => {
     expect(result.isError).toBe(true);
     expect(mockAxios).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['get_template', { templateId: 19375 }],
+    ['get_template_version', { templateId: 19375, templateVersion: 3 }],
+    ['get_template_library_item', { publicId: 'invoice' }],
+  ])('lets %s ask the API to leave the embedded images out', async (tool, args) => {
+    const result = await run(tool, { ...args, images: 'omit' });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).params).toEqual({ images: 'omit' });
+  });
+
+  it('opens several library templates in one call', async () => {
+    const result = await run('get_template_library_items', { ids: ['invoice', 'quote'], images: 'omit' });
+
+    expect(result.isError).toBeFalsy();
+    expect(mockAxios).toHaveBeenCalledTimes(1);
+    const config = mockAxios.mock.calls[0][0] as any;
+    expect(config.url).toMatch(/\/templates\/library\/items$/);
+    expect(config.params).toEqual({ ids: ['invoice', 'quote'], images: 'omit' });
+  });
+
+  it.each([
+    ['no id', { ids: [] }],
+    ['more than 5 ids', { ids: ['a', 'b', 'c', 'd', 'e', 'f'] }],
+    ['the ids as one string', { ids: 'invoice,quote' }],
+    ['an images value the API does not take', { ids: ['invoice'], images: 'thumbnails' }],
+  ])('refuses %s for get_template_library_items before it reaches the API', async (_, args) => {
+    const result = await run('get_template_library_items', args);
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
 });

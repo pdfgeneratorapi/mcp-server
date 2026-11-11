@@ -125,10 +125,10 @@ export const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
   ["get_template", {
     name: "get_template",
     description: `Returns template configuration`,
-    inputSchema: {"type":"object","properties":{"templateId":{"type":"number","description":"Template unique identifier"}},"required":["templateId"]},
+    inputSchema: {"type":"object","properties":{"templateId":{"type":"number","description":"Template unique identifier"},"images":{"type":"string","enum":["include","omit"],"default":"include","description":"`omit` replaces every file embedded in the definition with a short marker naming its type and size, such as `[omitted: image/png, 48 KB]`: an image given as a data URI (a component's `value`, a page's `backgroundImage`, an entry of `resources`) and the `backgroundPdf`. The rest of the definition is unchanged. A definition that still carries a marker cannot be saved: read the template with its images to change it, or change it with the template builder. `include`, the default, returns the definition whole.\n"}},"required":["templateId"]},
     method: "get",
     pathTemplate: "/templates/{templateId}",
-    executionParameters: [{"name":"templateId","in":"path"}],
+    executionParameters: [{"name":"templateId","in":"path"},{"name":"images","in":"query"}],
     requestBodyContentType: undefined,
   }],
   ["update_template", {
@@ -193,10 +193,10 @@ When using iframe, make sure that your browser allows third-party cookies.
     name: "get_template_version",
     description: `Returns the template definition of the specified version.
 `,
-    inputSchema: {"type":"object","properties":{"templateId":{"type":"number","description":"Template unique identifier"},"templateVersion":{"type":"number","description":"Unique ID of the template version."}},"required":["templateId","templateVersion"]},
+    inputSchema: {"type":"object","properties":{"templateId":{"type":"number","description":"Template unique identifier"},"templateVersion":{"type":"number","description":"Unique ID of the template version."},"images":{"type":"string","enum":["include","omit"],"default":"include","description":"`omit` replaces every file embedded in the definition with a short marker naming its type and size, such as `[omitted: image/png, 48 KB]`: an image given as a data URI (a component's `value`, a page's `backgroundImage`, an entry of `resources`) and the `backgroundPdf`. The rest of the definition is unchanged. A definition that still carries a marker cannot be saved: read the template with its images to change it, or change it with the template builder. `include`, the default, returns the definition whole.\n"}},"required":["templateId","templateVersion"]},
     method: "get",
     pathTemplate: "/templates/{templateId}/versions/{templateVersion}",
-    executionParameters: [{"name":"templateId","in":"path"},{"name":"templateVersion","in":"path"}],
+    executionParameters: [{"name":"templateId","in":"path"},{"name":"templateVersion","in":"path"},{"name":"images","in":"query"}],
     requestBodyContentType: undefined,
   }],
   ["delete_template_version", {
@@ -594,10 +594,20 @@ nothing and is not charged.
     name: "get_template_library_item",
     description: `Returns the template definition for a public template identified by its \`public_id\`.
 `,
-    inputSchema: {"type":"object","properties":{"publicId":{"type":"string","description":"Resource public id"}},"required":["publicId"]},
+    inputSchema: {"type":"object","properties":{"publicId":{"type":"string","description":"Resource public id"},"images":{"type":"string","enum":["include","omit"],"default":"include","description":"`omit` replaces every file embedded in the definition with a short marker naming its type and size, such as `[omitted: image/png, 48 KB]`: an image given as a data URI (a component's `value`, a page's `backgroundImage`, an entry of `resources`) and the `backgroundPdf`. The rest of the definition is unchanged. A definition that still carries a marker cannot be saved: read the template with its images to change it, or change it with the template builder. `include`, the default, returns the definition whole.\n"}},"required":["publicId"]},
     method: "get",
     pathTemplate: "/templates/library/{publicId}",
-    executionParameters: [{"name":"publicId","in":"path"}],
+    executionParameters: [{"name":"publicId","in":"path"},{"name":"images","in":"query"}],
+    requestBodyContentType: undefined,
+  }],
+  ["get_template_library_items", {
+    name: "get_template_library_items",
+    description: `Returns the template definitions of up to 5 public templates in one call, in the order of \`ids\`. An unknown \`public_id\` answers 404.
+`,
+    inputSchema: {"type":"object","properties":{"ids":{"type":"array","minItems":1,"maxItems":5,"items":{"type":"string"},"description":"The `public_id`s of the library templates to open, at most 5, as get_template_library lists them."},"images":{"type":"string","enum":["include","omit"],"default":"include","description":"`omit` replaces every file embedded in the definition with a short marker naming its type and size, such as `[omitted: image/png, 48 KB]`: an image given as a data URI (a component's `value`, a page's `backgroundImage`, an entry of `resources`) and the `backgroundPdf`. The rest of the definition is unchanged. A definition that still carries a marker cannot be saved: read the template with its images to change it, or change it with the template builder. `include`, the default, returns the definition whole.\n"}},"required":["ids"]},
+    method: "get",
+    pathTemplate: "/templates/library/items",
+    executionParameters: [{"name":"ids","in":"query"},{"name":"images","in":"query"}],
     requestBodyContentType: undefined,
   }],
   ["list_fonts", {
