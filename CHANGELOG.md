@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `get_templates` takes `search`, which matches a template's id, name, tags or dates, and sorts with `order_by` (`id`, `name`, `is_draft`, `created_at` or `updated_at`; `updated_at` when left out) and `order_direction` (`desc` when left out); the API ignores all three when `name` or `tags` is set. `get_workspaces` takes `search`, `order_by`, `order_direction` and `activated` (`1` or `0`), and `get_documents` takes `search` and `format` (`pdf` or `html`).
+- The generate tools take `attachments`, PDF or XML files embedded into the generated PDF (each a `name` ending in `.pdf` or `.xml`, and its base64 `content`), `print`, which opens the print dialog when the PDF is opened, and `empty_labels`, the label positions to leave empty at the start of the first sheet. `template.id` may be a public template id, and `template.data` a public URL that returns the JSON data or the data as a JSON string; `open_editor` takes `data` the same way, and `create_facturx_einvoice` a public template id too. Before, the tools refused these before they reached the API.
+- `create_einvoice` takes every `type` the API has: `XRECHNUNG-UBL`, `XRECHNUNG-CII` and the Factur-X profiles (`Factur-X-XRechnung`, `Factur-X-Extended`, `Factur-X-EN16931`, `Factur-X-Basic`, `Factur-X-BasicWL`, `Factur-X-Minimum`) as well as `UBL` and `CII`.
+- `make_accessible` answers with a `url` or a `viewer` link as well as a file or base64, and lists the processing `options` it takes.
+
+### Changed
+
+- The generate tools offer `format` `pdf` and `html` only, as the API's spec does: `xlsx` and `zip` are deprecated, and the tools now refuse them before they reach the API.
+- The tools refuse what the API refuses with a 422, before it reaches the API: a template name that is empty or longer than 120 characters, a workspace identifier longer than 120, a document name longer than 255, a callback, URL-to-PDF or QR code logo URL that is not https, QR code content longer than 4296 characters or a colour that is not hex, an imported `form` without its `name` and `actions`, and a Factur-X `template` without its `id` and `data`. A page's `layout` may be the empty array older templates store. `docs/apiv4.json` is the spec the API's production release serves (4.0.35), and the tool catalogue test now finds no field where a tool and the spec differ.
+
 ## 5.4.0 — 2026-11-11
 
 ### Added

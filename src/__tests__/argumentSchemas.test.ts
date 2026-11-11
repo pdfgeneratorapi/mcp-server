@@ -186,4 +186,71 @@ describe('tool argument schemas', () => {
     expect((result.content[0] as { text: string }).text).toContain('requestBody.callback');
     expect(mockAxios).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['get_templates', { search: 'Invoice', order_by: 'name', order_direction: 'asc' }],
+    ['get_workspaces', { search: 'demo', order_by: 'identifier', order_direction: 'asc', activated: 1 }],
+    ['get_documents', { search: 'Invoice', format: 'pdf' }],
+  ])('sends the search, sort and filters of %s to the API', async (tool, args) => {
+    const result = await run(tool, args);
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).params).toEqual(args);
+  });
+
+  it.each([
+    ['a public template id', { template: { id: 'ff3b3a3b9e8e', data: {} } }],
+    ['data from a URL', { template: { id: 58057, data: 'https://example.test/data.json' } }],
+    ['attachments, print and empty labels', {
+      template: { id: 58057, data: {} },
+      attachments: [{ name: 'invoice.xml', content: 'PD94bWw+' }],
+      print: true,
+      empty_labels: 2,
+    }],
+  ])('lets generate_document send %s', async (_, requestBody) => {
+    const result = await run('generate_document', { requestBody });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data).toEqual(requestBody);
+  });
+
+  it.each(['xlsx', 'zip'])('refuses the deprecated %s format before it reaches the API', async (format) => {
+    const result = await run('generate_document', { requestBody: { template: { id: 58057, data: {} }, format } });
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain('requestBody.format');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it.each(['url', 'viewer'])('lets make_accessible answer with a %s', async (output) => {
+    const result = await run('make_accessible', { requestBody: { file_url: 'https://example.test/a.pdf', output, options: ['add_tags'] } });
+
+    expect(result.isError).toBeFalsy();
+  });
+
+  it('refuses a make_accessible option the API does not have', async () => {
+    const result = await run('make_accessible', { requestBody: { file_url: 'https://example.test/a.pdf', options: ['make_it_nice'] } });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('lets create_einvoice make an XRechnung', async () => {
+    const result = await run('create_einvoice', { requestBody: { type: 'XRECHNUNG-UBL', data: {} } });
+
+    expect((result.content[0] as { text: string }).text).not.toContain('requestBody.type');
+  });
+
+  it.each([
+    ['a template name longer than 120 characters', 'create_template', { name: 'x'.repeat(121) }],
+    ['a callback URL that is not https', 'generate_document_async', {
+      template: { id: 58057, data: {} },
+      callback: { url: 'http://example.test/callback' },
+    }],
+  ])('refuses %s before it reaches the API', async (_, tool, requestBody) => {
+    const result = await run(tool, { requestBody });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
 });

@@ -67,17 +67,8 @@ function shapes(schema: any, prefix = '', found = new Map<string, Set<string>>()
   return found;
 }
 
-/** Body fields whose tool and spec still differ, by tool and field, and how. */
-const KNOWN_DRIFT: Record<string, string> = {
-  'make_accessible options[]': 'The tool takes any option; the spec lists them.',
-  'make_accessible output': 'The tool leaves out url and viewer, which the API accepts.',
-  ...Object.fromEntries(
-    ['generate_document', 'generate_document_async', 'generate_document_batch', 'generate_document_batch_async'].flatMap((tool) => [
-      [`${tool} format`, 'The spec leaves out xlsx and zip, which the API accepts.'],
-      [`${tool} ${tool.includes('batch') ? 'template[]' : 'template'}.id`, 'The tool takes only a numeric template id, not a public one.'],
-    ]),
-  ),
-};
+/** Body fields whose tool and spec still differ, by tool and field, and how. None do now. */
+const KNOWN_DRIFT: Record<string, string> = {};
 
 interface Operation {
   key: string;
