@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Tool results that are JSON reach the client compact, without indentation. Indented, a template or a template library item came to about twice its size, which pushed most library items past a client's output limit; the content is the same.
+
 ## 5.4.0 — 2026-11-11
 
 ### Added

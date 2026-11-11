@@ -79,7 +79,7 @@ describe('executeApiTool', () => {
 
     expect(result.content[0] as any).toMatchObject({
       type: 'text',
-      text: expect.stringContaining('"result": "ok"'),
+      text: expect.stringContaining('{"result":"ok"}'),
     });
   });
 
@@ -207,12 +207,13 @@ describe('executeApiTool', () => {
     expect((mockAxios.mock.calls[0][0] as any).responseType).toBe('arraybuffer');
   });
 
-  it('should pretty-print a JSON body that arrives as bytes', async () => {
-    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json; charset=utf-8' }, data: jsonBytes({ name: 'Ångström' }) });
+  it('should send a JSON body that arrives as bytes compact, without indentation', async () => {
+    const body = { name: 'Ångström', pages: [{ components: [{ cls: 'labelComponent', padding: { top: 0 } }] }] };
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json; charset=utf-8' }, data: jsonBytes(body) });
 
     const result = await executeApiTool('testTool', makeTool(), {});
 
-    expect((result.content[0] as any).text).toContain('"name": "Ångström"');
+    expect((result.content[0] as any).text).toBe(`API Response (Status: 200):\n${JSON.stringify(body)}`);
   });
 
   /**
@@ -869,7 +870,7 @@ describe('a tool that answers with images', () => {
 
     const result = await executeApiTool('testTool', tool, {});
 
-    expect(result.content).toEqual([{ type: 'text', text: 'API Response (Status: 200):\n{\n  "ok": true\n}' }]);
+    expect(result.content).toEqual([{ type: 'text', text: 'API Response (Status: 200):\n{"ok":true}' }]);
   });
 
   it('keeps an image an embedded file for a tool that does not answer with images', async () => {
