@@ -273,7 +273,8 @@ describe('tool argument schemas', () => {
       unit: 'in',
       texts: [
         { text: 'Thank you for your order', width: 2.2, fontSize: 12 },
-        { text: 'Invoice', width: 3, fontSize: 24, fontFamily: 'opensans', fontType: ['bold'], lineHeight: 1 },
+        { text: 'Invoice', width: 3, fontSize: 24, fontFamily: 'opensans', fontType: ['bold'], lineHeight: 1, letterSpacing: 2.5 },
+        { text: 'Tight', width: 3, fontSize: 24, letterSpacing: -10 },
       ],
     };
 
@@ -293,6 +294,9 @@ describe('tool argument schemas', () => {
     ['a font size with a fraction', { texts: [{ text: 'Invoice', width: 3, fontSize: 12.5 }] }],
     ['a style that does not change the width', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, fontType: ['underline'] }] }],
     ['a unit the API does not take', { unit: 'mm', texts: [{ text: 'Invoice', width: 3, fontSize: 12 }] }],
+    ['a letter spacing tighter than -10 px', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, letterSpacing: -10.5 }] }],
+    ['a letter spacing wider than 100 px', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, letterSpacing: 101 }] }],
+    ['a letter spacing given as a CSS length', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, letterSpacing: '2px' }] }],
   ])('refuses %s for measure_text before it reaches the API', async (_, requestBody) => {
     const result = await run('measure_text', { requestBody });
 
