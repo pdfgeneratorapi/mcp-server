@@ -122,6 +122,15 @@ export const toolDefinitionMap: Map<string, McpToolDefinition> = new Map([
     executionParameters: [],
     requestBodyContentType: "application/json",
   }],
+  ["measure_text", {
+    name: "measure_text",
+    description: `Lays out up to 20 texts the way a template's text components draw them and returns, for each, its width on one line, the lines it breaks into at the given width and its height, so a text box can be sized before the template is rendered. Font sizes are in pixels; widths and heights are in \`unit\`. A text is measured as given: \`{placeholders}\` are not filled in. A text containing HTML is measured for its height only, the height the template's layout gives it; its \`width\`, \`lines\` and \`line_count\` are \`null\`.`,
+    inputSchema: {"type":"object","properties":{"requestBody":{"type":"object","required":["texts"],"properties":{"unit":{"type":"string","description":"The unit of every width and height, given and returned.","enum":["cm","in"],"default":"cm"},"texts":{"type":"array","description":"The texts to measure, at most 20.","minItems":1,"maxItems":20,"items":{"type":"object","required":["text","width","fontSize"],"properties":{"text":{"type":"string","description":"The text, as it will be printed.","minLength":1,"maxLength":10000,"example":"Thank you for your order"},"width":{"type":"number","description":"The width of the text box, without padding or border, in `unit`.","minimum":0,"exclusiveMinimum":true,"example":5.6},"fontSize":{"type":"integer","description":"The font size in pixels, as a text component's `fontSize`.","minimum":1,"maximum":500,"example":12},"fontFamily":{"type":"string","description":"A font `id` from `GET /fonts`.","default":"opensans"},"fontType":{"type":"array","description":"The font styles that change the text's width.","items":{"type":"string","enum":["bold","italic"]}},"lineHeight":{"type":"number","description":"The line height relative to the font size, as a text component's `lineHeight`.","minimum":0,"exclusiveMinimum":true,"maximum":10,"default":1.15}}}}},"description":"The JSON request body."}},"required":["requestBody"]},
+    method: "post",
+    pathTemplate: "/templates/measure-text",
+    executionParameters: [],
+    requestBodyContentType: "application/json",
+  }],
   ["get_template", {
     name: "get_template",
     description: `Returns template configuration`,
