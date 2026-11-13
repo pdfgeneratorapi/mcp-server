@@ -268,6 +268,42 @@ describe('tool argument schemas', () => {
     expect((mockAxios.mock.calls[0][0] as any).params).toEqual({ images: 'omit' });
   });
 
+  it('measures texts', async () => {
+    const requestBody = {
+      unit: 'in',
+      texts: [
+        { text: 'Thank you for your order', width: 2.2, fontSize: 12 },
+        { text: 'Invoice', width: 3, fontSize: 24, fontFamily: 'opensans', fontType: ['bold'], lineHeight: 1, letterSpacing: 2.5 },
+        { text: 'Tight', width: 3, fontSize: 24, letterSpacing: -10 },
+      ],
+    };
+
+    const result = await run('measure_text', { requestBody });
+
+    expect(result.isError).toBeFalsy();
+    const config = mockAxios.mock.calls[0][0] as any;
+    expect(config.method).toBe('POST');
+    expect(config.url).toMatch(/\/templates\/measure-text$/);
+    expect(config.data).toEqual(requestBody);
+  });
+
+  it.each([
+    ['no text', { texts: [] }],
+    ['more than 20 texts', { texts: Array.from({ length: 21 }, () => ({ text: 'Invoice', width: 3, fontSize: 12 })) }],
+    ['a box with no width', { texts: [{ text: 'Invoice', width: 0, fontSize: 12 }] }],
+    ['a font size with a fraction', { texts: [{ text: 'Invoice', width: 3, fontSize: 12.5 }] }],
+    ['a style that does not change the width', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, fontType: ['underline'] }] }],
+    ['a unit the API does not take', { unit: 'mm', texts: [{ text: 'Invoice', width: 3, fontSize: 12 }] }],
+    ['a letter spacing tighter than -10 px', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, letterSpacing: -10.5 }] }],
+    ['a letter spacing wider than 100 px', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, letterSpacing: 101 }] }],
+    ['a letter spacing given as a CSS length', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, letterSpacing: '2px' }] }],
+  ])('refuses %s for measure_text before it reaches the API', async (_, requestBody) => {
+    const result = await run('measure_text', { requestBody });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
   it('opens several library templates in one call', async () => {
     const result = await run('get_template_library_items', { ids: ['invoice', 'quote'], images: 'omit' });
 
