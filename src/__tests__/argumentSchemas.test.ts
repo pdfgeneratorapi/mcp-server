@@ -1,4 +1,5 @@
 import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import { createRequire } from 'node:module';
 
 const mockAxios = jest.fn() as jest.Mock<any>;
 jest.unstable_mockModule('axios', () => ({
@@ -7,6 +8,8 @@ jest.unstable_mockModule('axios', () => ({
 }));
 
 const { executeApiTool } = await import('../execute.js');
+/** The real client, to see the query string it would send for a request the test captured. */
+const realAxios = createRequire(import.meta.url)('axios');
 const { catalogue } = await import('../catalogue.js');
 
 const ok = { status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"response":{}}') };
@@ -184,6 +187,144 @@ describe('tool argument schemas', () => {
 
     expect(result.isError).toBe(true);
     expect((result.content[0] as { text: string }).text).toContain('requestBody.callback');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['get_templates', { search: 'Invoice', order_by: 'name', order_direction: 'asc' }],
+    ['get_workspaces', { search: 'demo', order_by: 'identifier', order_direction: 'asc', activated: 1 }],
+    ['get_documents', { search: 'Invoice', format: 'pdf' }],
+  ])('sends the search, sort and filters of %s to the API', async (tool, args) => {
+    const result = await run(tool, args);
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).params).toEqual(args);
+  });
+
+  it.each([
+    ['a public template id', { template: { id: 'ff3b3a3b9e8e', data: {} } }],
+    ['data from a URL', { template: { id: 58057, data: 'https://example.test/data.json' } }],
+    ['attachments, print and empty labels', {
+      template: { id: 58057, data: {} },
+      attachments: [{ name: 'invoice.xml', content: 'PD94bWw+' }],
+      print: true,
+      empty_labels: 2,
+    }],
+  ])('lets generate_document send %s', async (_, requestBody) => {
+    const result = await run('generate_document', { requestBody });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data).toEqual(requestBody);
+  });
+
+  it.each(['xlsx', 'zip'])('refuses the deprecated %s format before it reaches the API', async (format) => {
+    const result = await run('generate_document', { requestBody: { template: { id: 58057, data: {} }, format } });
+
+    expect(result.isError).toBe(true);
+    expect((result.content[0] as { text: string }).text).toContain('requestBody.format');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it.each(['url', 'viewer'])('lets make_accessible answer with a %s', async (output) => {
+    const result = await run('make_accessible', { requestBody: { file_url: 'https://example.test/a.pdf', output, options: ['add_tags'] } });
+
+    expect(result.isError).toBeFalsy();
+  });
+
+  it('refuses a make_accessible option the API does not have', async () => {
+    const result = await run('make_accessible', { requestBody: { file_url: 'https://example.test/a.pdf', options: ['make_it_nice'] } });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('lets create_einvoice make an XRechnung', async () => {
+    const result = await run('create_einvoice', { requestBody: { type: 'XRECHNUNG-UBL', data: {} } });
+
+    expect((result.content[0] as { text: string }).text).not.toContain('requestBody.type');
+  });
+
+  it.each([
+    ['a template name longer than 120 characters', 'create_template', { name: 'x'.repeat(121) }],
+    ['a callback URL that is not https', 'generate_document_async', {
+      template: { id: 58057, data: {} },
+      callback: { url: 'http://example.test/callback' },
+    }],
+  ])('refuses %s before it reaches the API', async (_, tool, requestBody) => {
+    const result = await run(tool, { requestBody });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['get_template', { templateId: 19375 }],
+    ['get_template_version', { templateId: 19375, templateVersion: 3 }],
+    ['get_template_library_item', { publicId: 'invoice' }],
+  ])('lets %s ask the API to leave the embedded images out', async (tool, args) => {
+    const result = await run(tool, { ...args, images: 'omit' });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).params).toEqual({ images: 'omit' });
+  });
+
+  it('measures texts', async () => {
+    const requestBody = {
+      unit: 'in',
+      texts: [
+        { text: 'Thank you for your order', width: 2.2, fontSize: 12 },
+        { text: 'Invoice', width: 3, fontSize: 24, fontFamily: 'opensans', fontType: ['bold'], lineHeight: 1, letterSpacing: 2.5 },
+        { text: 'Tight', width: 3, fontSize: 24, letterSpacing: -10 },
+      ],
+    };
+
+    const result = await run('measure_text', { requestBody });
+
+    expect(result.isError).toBeFalsy();
+    const config = mockAxios.mock.calls[0][0] as any;
+    expect(config.method).toBe('POST');
+    expect(config.url).toMatch(/\/templates\/measure-text$/);
+    expect(config.data).toEqual(requestBody);
+  });
+
+  it.each([
+    ['no text', { texts: [] }],
+    ['more than 20 texts', { texts: Array.from({ length: 21 }, () => ({ text: 'Invoice', width: 3, fontSize: 12 })) }],
+    ['a box with no width', { texts: [{ text: 'Invoice', width: 0, fontSize: 12 }] }],
+    ['a font size with a fraction', { texts: [{ text: 'Invoice', width: 3, fontSize: 12.5 }] }],
+    ['a style that does not change the width', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, fontType: ['underline'] }] }],
+    ['a unit the API does not take', { unit: 'mm', texts: [{ text: 'Invoice', width: 3, fontSize: 12 }] }],
+    ['a letter spacing tighter than -10 px', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, letterSpacing: -10.5 }] }],
+    ['a letter spacing wider than 100 px', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, letterSpacing: 101 }] }],
+    ['a letter spacing given as a CSS length', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, letterSpacing: '2px' }] }],
+  ])('refuses %s for measure_text before it reaches the API', async (_, requestBody) => {
+    const result = await run('measure_text', { requestBody });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('opens several library templates in one call', async () => {
+    const result = await run('get_template_library_items', { ids: ['invoice', 'quote'], images: 'omit' });
+
+    expect(result.isError).toBeFalsy();
+    expect(mockAxios).toHaveBeenCalledTimes(1);
+    const config = mockAxios.mock.calls[0][0] as any;
+    expect(config.url).toMatch(/\/templates\/library\/items$/);
+    expect(config.params).toEqual({ ids: ['invoice', 'quote'], images: 'omit' });
+    expect(realAxios.getUri(config)).toBe(`${config.url}?ids%5B%5D=invoice&ids%5B%5D=quote&images=omit`);
+  });
+
+  it.each([
+    ['no id', { ids: [] }],
+    ['more than 5 ids', { ids: ['a', 'b', 'c', 'd', 'e', 'f'] }],
+    ['the ids as one string', { ids: 'invoice,quote' }],
+    ['an id given twice', { ids: ['invoice', 'invoice'] }],
+    ['an images value the API does not take', { ids: ['invoice'], images: 'thumbnails' }],
+  ])('refuses %s for get_template_library_items before it reaches the API', async (_, args) => {
+    const result = await run('get_template_library_items', args);
+
+    expect(result.isError).toBe(true);
     expect(mockAxios).not.toHaveBeenCalled();
   });
 });

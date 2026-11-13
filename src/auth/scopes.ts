@@ -25,6 +25,7 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   // The public template library: shared templates, no customer data.
   get_template_library: null,
   get_template_library_item: null,
+  get_template_library_items: null,
 
   get_templates: 'templates:read',
   get_template: 'templates:read',
@@ -32,6 +33,7 @@ export const TOOL_SCOPES: Record<string, string | null> = {
   list_fonts: 'templates:read',
   get_template_data: 'templates:read',
   validate_template: 'templates:read',
+  measure_text: 'templates:read',
   list_template_versions: 'templates:read',
   get_template_version: 'templates:read',
   create_template: 'templates:write',

@@ -393,6 +393,20 @@ function formatApiError(error: AxiosError): string {
  * @param toolName Tool name for error reporting
  * @returns Zod schema
  */
+/**
+ * json-schema-to-zod writes uniqueItems as `.unique()`, a method zod 3 arrays do not have, so the
+ * schema failed to build and the tool accepted anything. Arrays get that method here: a list whose
+ * items are not all different is refused, as the API refuses it.
+ */
+if (typeof (z.ZodArray.prototype as any).unique !== 'function') {
+    (z.ZodArray.prototype as any).unique = function (this: z.ZodArray<z.ZodTypeAny>, message?: string) {
+        return this.refine(
+            (items) => new Set(items.map((item) => JSON.stringify(item))).size === items.length,
+            { message: message ?? 'Items must be unique' },
+        );
+    };
+}
+
 function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTypeAny {
     if (typeof jsonSchema !== 'object' || jsonSchema === null) { 
         return z.object({}).passthrough(); 
