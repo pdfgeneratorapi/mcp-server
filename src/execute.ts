@@ -228,7 +228,7 @@ function formatResponse(
     const json = summarize && contentType.includes('json') ? parseJson(body) : undefined;
 
     if (summarize && json && typeof json === 'object') {
-        const summary = JSON.stringify(summarize(json), null, 2);
+        const summary = JSON.stringify(summarize(json));
         return { content: [{ type: 'text', text: `API Response (Status: ${status}), summarized; set ${FULL_RESPONSE_ARGUMENT} to true for all of it:\n${summary}` }] };
     }
 
@@ -307,7 +307,7 @@ function decodeText(body: Buffer, contentType: string): string {
 
     if (contentType.includes('json')) {
         try {
-            return JSON.stringify(JSON.parse(text), null, 2);
+            return JSON.stringify(JSON.parse(text));
         } catch {
             return text;
         }
@@ -326,7 +326,7 @@ function parseJson(body: Buffer): unknown {
 
 function safeStringify(value: unknown): string {
     try {
-        return JSON.stringify(value, null, 2);
+        return JSON.stringify(value);
     } catch {
         return '[Stringify Error]';
     }

@@ -15,6 +15,7 @@
 
 - The generate tools offer `format` `pdf` and `html` only, as the API's spec does: `xlsx` and `zip` are deprecated, and the tools now refuse them before they reach the API.
 - The tools refuse what the API refuses with a 422, before it reaches the API: a template name that is empty or longer than 120 characters, a workspace identifier longer than 120, a document name longer than 255, a callback, URL-to-PDF or QR code logo URL that is not https, QR code content longer than 4296 characters or a colour that is not hex, an imported `form` without its `name` and `actions`, and a Factur-X `template` without its `id` and `data`. A page's `layout` may be the empty array older templates store. `docs/apiv4.json` is the spec the API's production release serves (4.0.35), and the tool catalogue test now finds no field where a tool and the spec differ.
+- Tool results that are JSON reach the client compact, without indentation. Indented, a template or a template library item came to about twice its size, which pushed most library items past a client's output limit; the content is the same.
 
 ## 5.4.0 — 2026-11-11
 
