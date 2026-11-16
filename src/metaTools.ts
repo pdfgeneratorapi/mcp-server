@@ -12,7 +12,8 @@ import {
   MAX_SEARCH_LIMIT,
   isReadOnlyCall,
   operations,
-  searchOperations,
+  rankOperations,
+  searchLimit,
   type Operation,
   type OperationCategory,
 } from './operations.js';
@@ -173,7 +174,8 @@ export function searchOperationsResult(args: JsonObject, granted: Operation[]): 
     return text(`limit must be a whole number from 1 to ${MAX_SEARCH_LIMIT}.`, true);
   }
 
-  const found = searchOperations(query, { category: category as OperationCategory | undefined, limit, operations: granted });
+  const ranked = rankOperations(query, { category: category as OperationCategory | undefined, operations: granted });
+  const found = ranked.slice(0, searchLimit(limit));
 
   if (found.length === 0) {
     return text(`No operation matches "${query}". Search in other words, or list a category with an empty query: ${CATEGORIES.join(', ')}.`);
@@ -182,6 +184,9 @@ export function searchOperationsResult(args: JsonObject, granted: Operation[]): 
   return text([
     'id | title | category | run with | schema tokens',
     ...found.map(operation => [operation.id, operation.title, operation.category, runToolOf(operation), operation.schemaTokens].join(' | ')),
+    ...(ranked.length > found.length
+      ? [`Showing ${found.length} of ${ranked.length}: raise limit, up to ${MAX_SEARCH_LIMIT}, or narrow the search to see the rest.`]
+      : []),
   ].join('\n'));
 }
 

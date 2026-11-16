@@ -112,7 +112,8 @@ describe('search_operations', () => {
   it('lists a category for an empty query, and takes a limit', () => {
     const lines = textOf(searchOperationsResult({ category: 'workspaces', limit: 2 }, all)).split('\n');
 
-    expect(lines.slice(1).map(line => line.split(' | ')[0])).toEqual(['get_workspaces', 'create_workspace']);
+    expect(lines.slice(1, 3).map(line => line.split(' | ')[0])).toEqual(['get_workspaces', 'create_workspace']);
+    expect(lines[3]).toBe('Showing 2 of 4: raise limit, up to 25, or narrow the search to see the rest.');
   });
 
   /** Some clients send null for every optional argument they leave out. */
@@ -122,6 +123,20 @@ describe('search_operations', () => {
     expect(result.isError).toBeUndefined();
     expect(textOf(result)).toContain('add_watermark | Add Watermark to PDF');
     expect(textOf(searchOperationsResult({ query: null, category: 'workspaces' }, all))).toContain('get_workspaces');
+  });
+
+  it('says how many it left out, and how to see them', () => {
+    const lines = textOf(searchOperationsResult({ category: 'templates' }, all)).split('\n');
+
+    expect(lines).toHaveLength(12);
+    expect(lines[11]).toBe('Showing 10 of 23: raise limit, up to 25, or narrow the search to see the rest.');
+  });
+
+  it('says nothing more when it lists every match', () => {
+    const lines = textOf(searchOperationsResult({ category: 'templates', limit: 25 }, all)).split('\n');
+
+    expect(lines).toHaveLength(24);
+    expect(lines.some(line => line.startsWith('Showing'))).toBe(false);
   });
 
   it('says when nothing matches, without an error', () => {

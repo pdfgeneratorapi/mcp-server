@@ -42,6 +42,7 @@ const KEYWORDS: Record<string, string[]> = {
   get_document_signatures: ['signed', 'verify'],
   promote_template_version: ['restore', 'revert', 'rollback', 'publish', 'live'],
   copy_template: ['duplicate', 'clone'],
+  update_template: ['edit', 'modify', 'rename', 'change'],
   delete_template: ['remove'],
   delete_template_version: ['remove'],
   delete_document: ['remove'],
@@ -52,7 +53,7 @@ const KEYWORDS: Record<string, string[]> = {
   validate_template: ['check'],
   open_editor: ['edit', 'design'],
   get_builder_guide: ['build', 'layout', 'design'],
-  run_builder_tool: ['component', 'page', 'row', 'column', 'table', 'add', 'move', 'patch', 'remove', 'change'],
+  run_builder_tool: ['component', 'page', 'row', 'column', 'table', 'add', 'move', 'patch', 'remove', 'change', 'edit', 'modify', 'rename', 'restyle'],
   convert_url_to_pdf: ['website', 'webpage', 'web'],
   generate_qr_code: ['barcode'],
   store_document: ['upload', 'save'],
@@ -93,11 +94,14 @@ interface IndexedOperation {
   fields: { words: Set<string>; weight: number }[];
 }
 
-export interface SearchOptions {
+export interface RankOptions {
   category?: OperationCategory;
-  limit?: number;
   /** The operations to search, all of them by default. */
   operations?: Operation[];
+}
+
+export interface SearchOptions extends RankOptions {
+  limit?: number;
 }
 
 function words(text: string): string[] {
@@ -191,20 +195,29 @@ function termMatch(term: string, entry: IndexedOperation): number {
   return best;
 }
 
+/** How many results a search returns: the limit asked for, within 1 and MAX_SEARCH_LIMIT. */
+export function searchLimit(limit?: number): number {
+  return Math.min(Math.max(Math.trunc(limit ?? DEFAULT_SEARCH_LIMIT), 1), MAX_SEARCH_LIMIT);
+}
+
+/** The best matches for a query, as many as the limit allows; see rankOperations. */
+export function searchOperations(query: string, options: SearchOptions = {}): Operation[] {
+  return rankOperations(query, options).slice(0, searchLimit(options.limit));
+}
+
 /**
- * The operations that best match a query, best first. A term counts most in the ID and the title,
+ * Every operation that matches a query, best first. A term counts most in the ID and the title,
  * less in the keywords and least in the description; a term most operations share counts less, and
  * an operation that matches every term ranks above one that matches some. A query of stop words
  * only lists the operations in catalogue order.
  */
-export function searchOperations(query: string, options: SearchOptions = {}): Operation[] {
-  const limit = Math.min(Math.max(Math.trunc(options.limit ?? DEFAULT_SEARCH_LIMIT), 1), MAX_SEARCH_LIMIT);
+export function rankOperations(query: string, options: RankOptions = {}): Operation[] {
   const candidates = (options.operations ?? [...operations.values()])
     .filter(operation => options.category === undefined || operation.category === options.category);
   const terms = [...new Set(words(query).filter(term => !STOP_WORDS.has(term)))];
 
   if (terms.length === 0) {
-    return candidates.slice(0, limit);
+    return candidates;
   }
 
   const entries = candidates.map(operation => index.get(operation.id)!);
@@ -228,6 +241,5 @@ export function searchOperations(query: string, options: SearchOptions = {}): Op
 
   return results
     .filter(result => result.score >= best * MIN_RELATIVE_SCORE)
-    .slice(0, limit)
     .map(result => result.operation);
 }

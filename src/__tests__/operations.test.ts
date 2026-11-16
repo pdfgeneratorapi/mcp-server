@@ -2,6 +2,8 @@ import { describe, it, expect } from '@jest/globals';
 import {
   CATEGORIES,
   estimateTokens,
+  rankOperations,
+  searchLimit,
   isReadOnlyCall,
   operations,
   searchOperations,
@@ -138,6 +140,14 @@ describe('searchOperations', () => {
     expect(searchOperations(query)[0]?.id).toBe(expected);
   });
 
+  it.each([
+    ['edit template'],
+    ['modify template'],
+    ['rename template'],
+  ])('finds the ways to change a template for "%s"', (query) => {
+    expect(ids(searchOperations(query))).toEqual(expect.arrayContaining(['update_template', 'run_builder_tool']));
+  });
+
   it('ranks an operation matching every term above those matching some', () => {
     expect(ids(searchOperations('delete template')).slice(0, 2)).toEqual(['delete_template', 'delete_template_version']);
   });
@@ -173,6 +183,15 @@ describe('searchOperations', () => {
       .toEqual(['get_workspaces', 'create_workspace', 'get_workspace', 'delete_workspace']);
     expect(ids(searchOperations('', { category: 'workspaces' })))
       .toEqual(['get_workspaces', 'create_workspace', 'get_workspace', 'delete_workspace']);
+  });
+
+  it('ranks every match, for a search to say how many it left out', () => {
+    expect(rankOperations('', { category: 'templates' })).toHaveLength(23);
+    expect(ids(rankOperations('watermark'))).toEqual(['add_watermark']);
+  });
+
+  it('keeps the limit between 1 and 25, 10 when none is given', () => {
+    expect([searchLimit(), searchLimit(3), searchLimit(100), searchLimit(0), searchLimit(2.7)]).toEqual([10, 3, 25, 1, 2]);
   });
 
   it('returns 10 results by default, and between 1 and 25 when asked', () => {
