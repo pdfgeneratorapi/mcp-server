@@ -81,19 +81,6 @@ function callTool(url: string, token: string, sessionId: string, name: string, a
 }
 
 describe('scope enforcement over HTTP', () => {
-  it('answers a call outside the grant with the step-up challenge', async () => {
-    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
-    const token = 'user-a.client-1.templates~read';
-    const { url, sessionId } = await connect(token);
-
-    const response = await callTool(url, token, sessionId, 'delete_template');
-    await response.text();
-
-    expect(response.status).toBe(403);
-    expect(response.headers.get('www-authenticate')).toContain('error="insufficient_scope"');
-    expect(response.headers.get('www-authenticate')).toContain('scope="templates:read templates:delete"');
-  });
-
   /**
    * Clients ask for exactly the scopes the challenge names, so a challenge naming only the
    * missing scope would leave the client with a grant that has only that scope.
@@ -103,64 +90,15 @@ describe('scope enforcement over HTTP', () => {
     const token = 'user-a.client-1.templates~read+documents~read+forms~read';
     const { url, sessionId } = await connect(token);
 
-    const response = await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 7, tool: 'rename_template' });
+    const response = await callTool(url, token, sessionId, 'call_operation', {
+      id: 'run_builder_tool',
+      arguments: { template_id: 7, tool: 'rename_template' },
+    });
     await response.text();
 
     expect(response.status).toBe(403);
     expect(/scope="([^"]*)"/.exec(response.headers.get('www-authenticate') ?? '')?.[1])
       .toBe('templates:read documents:read forms:read templates:write');
-  });
-
-  it('lets a call the grant covers through', async () => {
-    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
-    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"response":[]}') });
-    const token = 'user-a.client-1.templates~read';
-    const { url, sessionId } = await connect(token);
-
-    const response = await callTool(url, token, sessionId, 'get_templates');
-    await response.text();
-
-    expect(response.status).toBe(200);
-  });
-
-  /**
-   * The first release only reports, so a mistake in the tool-to-scope map cannot lock
-   * anyone out of a tool they used yesterday.
-   */
-  it('reports but allows while in warn mode', async () => {
-    process.env.MCP_SCOPE_ENFORCEMENT = 'warn';
-    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{}') });
-    const token = 'user-a.client-1.templates~read';
-    const { url, sessionId } = await connect(token);
-
-    const response = await callTool(url, token, sessionId, 'delete_template');
-    await response.text();
-
-    expect(response.status).toBe(200);
-  });
-
-  it('asks for templates:write to run a builder tool that changes the template', async () => {
-    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
-    const token = 'user-a.client-1.templates~read';
-    const { url, sessionId } = await connect(token);
-
-    const response = await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 7, tool: 'add_component' });
-    await response.text();
-
-    expect(response.status).toBe(403);
-    expect(response.headers.get('www-authenticate')).toContain('scope="templates:read templates:write"');
-  });
-
-  it('lets a template-read client run a builder tool that only reads', async () => {
-    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
-    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"response":[]}') });
-    const token = 'user-a.client-1.templates~read';
-    const { url, sessionId } = await connect(token);
-
-    const response = await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 7, tool: 'list_pages' });
-    await response.text();
-
-    expect(response.status).toBe(200);
   });
 
   it('answers a run of an operation outside the grant with the step-up challenge', async () => {
@@ -235,6 +173,10 @@ describe('scope enforcement over HTTP', () => {
     expect(body).toContain('There is no operation');
   });
 
+  /**
+   * The first release only reports, so a mistake in the tool-to-scope map cannot lock
+   * anyone out of a tool they used yesterday.
+   */
   it('reports but runs an operation outside the grant in warn mode', async () => {
     process.env.MCP_SCOPE_ENFORCEMENT = 'warn';
     mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{}') });

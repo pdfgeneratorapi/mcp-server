@@ -156,13 +156,14 @@ describe('request telemetry', () => {
     const token = 'user-7.client-1.templates~read';
     const { url, sessionId } = await connect(token);
 
-    await callTool(url, token, sessionId, 'get_templates');
+    await callTool(url, token, sessionId, 'read_operation', { id: 'get_templates' });
 
     const calls = requestLines().filter(line => line.method === 'tools/call');
     expect(calls).toEqual([expect.objectContaining({
       workspace_id: WORKSPACE_ID,
       client_name: CLIENT.name,
-      tool: 'get_templates',
+      tool: 'read_operation',
+      operation: 'get_templates',
       outcome: 'ok',
       upstream_status: 200,
       duration_ms: expect.any(Number),
@@ -174,10 +175,11 @@ describe('request telemetry', () => {
     const token = 'user-7.client-1.templates~read';
     const { url, sessionId } = await connect(token);
 
-    await callTool(url, token, sessionId, 'get_template', { templateId: 1 });
+    await callTool(url, token, sessionId, 'read_operation', { id: 'get_template', arguments: { templateId: 1 } });
 
     expect(requestLines().find(line => line.method === 'tools/call')).toEqual(expect.objectContaining({
-      tool: 'get_template',
+      tool: 'read_operation',
+      operation: 'get_template',
       outcome: 'error',
       upstream_status: 404,
     }));
@@ -193,7 +195,10 @@ describe('request telemetry', () => {
     const argument = 'Quarterly invoice for a customer';
     const { url, sessionId } = await connect(token);
 
-    await callTool(url, token, sessionId, 'update_template', { templateId: 1, requestBody: { name: argument } });
+    await callTool(url, token, sessionId, 'call_operation', {
+      id: 'update_template',
+      arguments: { templateId: 1, requestBody: { name: argument } },
+    });
 
     const lines = output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n');
     expect(lines).toContain('update_template');
@@ -201,46 +206,16 @@ describe('request telemetry', () => {
     expect(lines).not.toContain(argument);
   });
 
-  it('logs a call refused for a missing scope as a refusal', async () => {
-    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
-    const token = 'user-7.client-1.templates~read';
-    const { url, sessionId } = await connect(token);
-
-    await callTool(url, token, sessionId, 'delete_template', { templateId: 1 });
-
-    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
-      tool: 'delete_template',
-      status: 403,
-      outcome: 'refused',
-      refusal: 'insufficient_scope',
-    })]);
-  });
-
-  it('names the builder tool a run_builder_tool call ran', async () => {
-    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
-    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"response":{"status":"ok"}}') });
-    const token = 'user-7.client-1.templates~write';
-    const { url, sessionId } = await connect(token);
-
-    await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 1, tool: 'add_component' });
-
-    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
-      tool: 'run_builder_tool',
-      builder_tool: 'add_component',
-      outcome: 'ok',
-      upstream_status: 200,
-    })]);
-  });
-
   it('names the builder tool of a run_builder_tool call refused for its scope', async () => {
     process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
     const token = 'user-7.client-1.templates~read';
     const { url, sessionId } = await connect(token);
 
-    await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 1, tool: 'remove_page' });
+    await callTool(url, token, sessionId, 'call_operation', { id: 'run_builder_tool', arguments: { template_id: 1, tool: 'remove_page' } });
 
     expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
-      tool: 'run_builder_tool',
+      tool: 'call_operation',
+      operation: 'run_builder_tool',
       builder_tool: 'remove_page',
       status: 403,
       refusal: 'insufficient_scope',
@@ -257,10 +232,10 @@ describe('request telemetry', () => {
     const argument = 'Quarterly invoice for a customer';
     const { url, sessionId } = await connect(token);
 
-    await callTool(url, token, sessionId, 'run_builder_tool', { template_id: 1, tool: argument });
+    await callTool(url, token, sessionId, 'call_operation', { id: 'run_builder_tool', arguments: { template_id: 1, tool: argument } });
 
     const call = requestLines().find(line => line.method === 'tools/call');
-    expect(call).toEqual(expect.objectContaining({ tool: 'run_builder_tool' }));
+    expect(call).toEqual(expect.objectContaining({ tool: 'call_operation', operation: 'run_builder_tool' }));
     expect(call).not.toHaveProperty('builder_tool');
     expect(output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n')).not.toContain(argument);
   });
@@ -325,6 +300,7 @@ describe('request telemetry', () => {
       operation: 'run_builder_tool',
       builder_tool: 'add_component',
       outcome: 'ok',
+      upstream_status: 200,
     })]);
   });
 
