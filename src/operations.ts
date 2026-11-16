@@ -5,7 +5,6 @@
 import type { McpToolDefinition } from './types.js';
 import { catalogue } from './catalogue.js';
 import { toolAnnotations } from './annotations.js';
-import { simplifySchemaForOpenAI } from './schema.js';
 import { requiredScope } from './auth/scopes.js';
 import { RUN_BUILDER_TOOL, builderToolChangesTemplate } from './builder.js';
 
@@ -81,7 +80,10 @@ export interface Operation {
   category: OperationCategory;
   title: string;
   readOnly: boolean;
-  /** Roughly how many tokens the operation's input schema takes, at four characters a token. */
+  /**
+   * Roughly how many tokens the operation's input schema takes, at four characters a token: the
+   * whole schema, as describe_operation returns it.
+   */
   schemaTokens: number;
   definition: McpToolDefinition;
 }
@@ -129,7 +131,7 @@ function toOperation(definition: McpToolDefinition): Operation {
     category: categoryOf(definition.name),
     title: annotations.title,
     readOnly: annotations.readOnlyHint === true,
-    schemaTokens: estimateTokens(simplifySchemaForOpenAI(definition.inputSchema)),
+    schemaTokens: estimateTokens(definition.inputSchema),
     definition,
   };
 }

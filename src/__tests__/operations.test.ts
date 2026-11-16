@@ -8,7 +8,6 @@ import {
   type Operation,
 } from '../operations.js';
 import { catalogue } from '../catalogue.js';
-import { simplifySchemaForOpenAI } from '../schema.js';
 
 const operation = (id: string): Operation => {
   const found = operations.get(id);
@@ -74,10 +73,10 @@ describe('the operation index', () => {
     expect(estimateTokens({ type: 'object', properties: {} })).toBe(9);
   });
 
-  it('costs each operation its schema as clients get it', () => {
-    const updateTemplate = operation('update_template');
+  it('costs each operation its whole input schema', () => {
+    const addWatermark = operation('add_watermark');
 
-    expect(updateTemplate.schemaTokens).toBe(estimateTokens(simplifySchemaForOpenAI(updateTemplate.definition.inputSchema)));
+    expect(addWatermark.schemaTokens).toBe(estimateTokens(addWatermark.definition.inputSchema));
     expect(operation('get_status').schemaTokens).toBe(9);
   });
 });
