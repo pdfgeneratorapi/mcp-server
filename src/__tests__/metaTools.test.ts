@@ -15,6 +15,7 @@ const {
   describeOperationsResult,
   exampleArguments,
   grantedOperations,
+  isRunTool,
   metaTools,
   notGrantedMessage,
   resolveRun,
@@ -62,6 +63,21 @@ describe('the meta-tools', () => {
     expect(metaTools.get(READ_OPERATION)!.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
     expect(metaTools.get(CALL_OPERATION)!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
     expect(metaTools.get(DELETE_OPERATION)!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+  });
+
+  /** A client may retry an idempotent tool, and a run tool also runs what is below its level, such as generating a document. */
+  it('hint that no run tool is idempotent but read_operation', () => {
+    expect(metaTools.get(READ_OPERATION)!.annotations.idempotentHint).toBe(true);
+    expect(metaTools.get(CALL_OPERATION)!.annotations.idempotentHint).toBe(false);
+    expect(metaTools.get(DELETE_OPERATION)!.annotations.idempotentHint).toBe(false);
+  });
+
+  it.each([['constructor'], ['toString'], ['__proto__'], ['hasOwnProperty'], ['search_operations'], ['get_templates']])('does not take %s for a run tool', (name) => {
+    expect(isRunTool(name)).toBe(false);
+  });
+
+  it.each([[READ_OPERATION], [CALL_OPERATION], [DELETE_OPERATION]])('takes %s for a run tool', (name) => {
+    expect(isRunTool(name)).toBe(true);
   });
 
   it('name the tool that runs each operation', () => {
@@ -465,6 +481,14 @@ describe('the server', () => {
     expect(read.isError).toBe(true);
     expect(textOf(read as any)).toBe('Error: There is no tool "get_templates": it is an operation. Run it with read_operation, with the arguments describe_operation shows for it.');
     expect(textOf(call as any)).toBe('Error: There is no tool "delete_template": it is an operation. Run it with delete_operation, with the arguments describe_operation shows for it.');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('refuses a tool named like an inherited object property as a tool it does not have', async () => {
+    const result = await (await connectedClient()).callTool({ name: 'constructor', arguments: { id: 'get_status' } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result as any)).toBe('Error: Unknown tool requested: constructor. Find what you need with search_operations.');
     expect(mockAxios).not.toHaveBeenCalled();
   });
 

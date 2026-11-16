@@ -111,7 +111,8 @@ export const metaTools: Map<string, MetaTool> = new Map([
     name: DELETE_OPERATION,
     description: `Runs an operation that deletes something: a template, a template version, a document, a workspace or a form. What it deletes cannot be restored, so make sure the user wants it gone. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them.`,
     inputSchema: runInputSchema,
-    annotations: { title: 'Run a Delete Operation', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+    // Not idempotent: it runs anything below a delete too, such as generating a document
+    annotations: { title: 'Run a Delete Operation', readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   }],
 ]);
 
@@ -163,7 +164,7 @@ const LEVEL_DOES: Record<OperationLevel, string> = {
 };
 
 export function isRunTool(toolName: string): boolean {
-  return toolName in RUN_TOOL_LEVELS;
+  return Object.hasOwn(RUN_TOOL_LEVELS, toolName);
 }
 
 /** The tool that runs an operation. */
@@ -287,7 +288,7 @@ export function resolveRun(toolName: string, args: JsonObject): RunResolution {
 
   // A run tool runs anything at its level or below: a read through call_operation is only asked
   // about more than it needs to be. One above its level would skip the client's confirmation.
-  if (LEVELS.indexOf(level) > LEVELS.indexOf(RUN_TOOL_LEVELS[toolName] ?? 'read')) {
+  if (LEVELS.indexOf(level) > LEVELS.indexOf(isRunTool(toolName) ? RUN_TOOL_LEVELS[toolName] : 'read')) {
     return { refusal: 'wrong_run_tool', message: `"${id}" ${LEVEL_DOES[level]}, so run it with ${RUN_TOOL_FOR[level]}.` };
   }
 
