@@ -131,9 +131,9 @@ describe('the 2026-07-28 revision', () => {
     expect(transport.sessionId).toBeUndefined();
 
     const { tools } = await client.listTools();
-    expect(tools.map(tool => tool.name)).toContain('get_status');
+    expect(tools.map(tool => tool.name)).toContain('read_operation');
 
-    const result = await client.callTool({ name: 'get_status', arguments: {} });
+    const result = await client.callTool({ name: 'read_operation', arguments: { id: 'get_status' } });
     expect(result.isError).toBeFalsy();
   });
 
@@ -147,8 +147,8 @@ describe('the 2026-07-28 revision', () => {
     mockAxios.mockResolvedValue(ok);
     const { client } = await connect('user-1.client-1', { pin: MODERN });
 
-    await client.callTool({ name: 'get_status', arguments: {} });
-    await client.callTool({ name: 'get_status', arguments: {} });
+    await client.callTool({ name: 'read_operation', arguments: { id: 'get_status' } });
+    await client.callTool({ name: 'read_operation', arguments: { id: 'get_status' } });
 
     expect(credentials.get.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(credentials.get.mock.calls.every(([authInfo]: any[]) => authInfo?.token === 'user-1.client-1' && authInfo?.clientId === 'client-1')).toBe(true);
@@ -171,7 +171,10 @@ describe('the 2026-07-28 revision', () => {
     process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
     const url = await start();
 
-    const response = await modernPost(url, 'user-1.client-1.templates~read', 'tools/call', { name: 'delete_template', arguments: { templateId: 1 } });
+    const response = await modernPost(url, 'user-1.client-1.templates~read', 'tools/call', {
+      name: 'call_operation',
+      arguments: { id: 'delete_template', arguments: { templateId: 1 } },
+    });
 
     expect(response.status).toBe(403);
     expect(response.headers.get('WWW-Authenticate')).toContain('error="insufficient_scope"');
@@ -182,7 +185,7 @@ describe('the 2026-07-28 revision', () => {
     mockAxios.mockResolvedValue(ok);
     const url = await start();
 
-    const response = await modernPost(url, 'user-1.client-1', 'tools/call', { name: 'get_status', arguments: {} });
+    const response = await modernPost(url, 'user-1.client-1', 'tools/call', { name: 'read_operation', arguments: { id: 'get_status' } });
     await response.text();
 
     expect(response.status).toBe(200);
@@ -192,7 +195,8 @@ describe('the 2026-07-28 revision', () => {
       client_version: CLIENT.version,
       protocol_version: MODERN,
       method: 'tools/call',
-      tool: 'get_status',
+      tool: 'read_operation',
+      operation: 'get_status',
       status: 200,
       outcome: 'ok',
       upstream_status: 200,
@@ -203,7 +207,7 @@ describe('the 2026-07-28 revision', () => {
     mockAxios.mockResolvedValue(ok);
     const url = await start();
 
-    await (await modernPost(url, 'user-1.client-1', 'tools/call', { name: 'get_status', arguments: {} })).text();
+    await (await modernPost(url, 'user-1.client-1', 'tools/call', { name: 'read_operation', arguments: { id: 'get_status' } })).text();
 
     expect(output).toContain(`POST tools/call in protocol revision ${MODERN}, no session`);
     expect(output.filter(line => line.includes('session ID'))).toEqual([]);
@@ -216,7 +220,7 @@ describe('2025-era clients', () => {
 
     expect(client.getProtocolEra()).toBe('legacy');
     expect(transport.sessionId).toEqual(expect.any(String));
-    expect((await client.listTools()).tools.map(tool => tool.name)).toContain('get_status');
+    expect((await client.listTools()).tools.map(tool => tool.name)).toContain('read_operation');
     expect(output).toContain(`POST request received with session ID: ${transport.sessionId}`);
   });
 });
