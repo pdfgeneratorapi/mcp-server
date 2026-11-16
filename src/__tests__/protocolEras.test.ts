@@ -163,8 +163,7 @@ describe('the 2026-07-28 revision', () => {
 
     const names = (await client.listTools()).tools.map(tool => tool.name);
 
-    expect(names).toContain('get_templates');
-    expect(names).not.toContain('delete_template');
+    expect(names).toEqual(['search_operations', 'describe_operation', 'read_operation']);
   });
 
   it('answers a call outside the grant with the step-up challenge', async () => {

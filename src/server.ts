@@ -9,8 +9,6 @@ import { SERVER_NAME, SERVER_VERSION } from './config.js';
 import { SERVER_ICON } from './icon.js';
 import { log } from './logger.js';
 import { simplifySchemaForOpenAI } from './schema.js';
-import { catalogue } from './catalogue.js';
-import { toolAnnotations } from './annotations.js';
 import {
     CALL_OPERATION,
     DESCRIBE_OPERATION,
@@ -20,11 +18,12 @@ import {
     grantedOperations,
     resolveRun,
     searchOperationsResult,
+    unknownToolMessage,
     visibleMetaTools,
 } from './metaTools.js';
 import { executeApiTool } from './execute.js';
 import { isEndedGrant, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
-import { loadScopeEnforcement, mayCallTool, visibleTools } from './auth/scopes.js';
+import { loadScopeEnforcement, mayCallTool } from './auth/scopes.js';
 import { builderToolOf, elapsedSince, operationOf, type ToolCallRecord } from './telemetry.js';
 import type { AuthInfo } from '@modelcontextprotocol/server';
 
@@ -88,22 +87,13 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
     server.setRequestHandler('tools/list', async (_request, ctx) => {
         const enforcement = loadScopeEnforcement();
         const scopes = ctx.http?.authInfo?.scopes ?? [];
-        const allowed = enforcement === 'off' ? null : new Set(visibleTools(scopes));
-        const operationTools: Tool[] = Array.from(catalogue.values())
-            .filter(def => allowed === null || allowed.has(def.name))
-            .map(def => ({
-            name: def.name,
-            description: def.description,
-            inputSchema: simplifySchemaForOpenAI(def.inputSchema),
-            annotations: toolAnnotations[def.name],
-        }));
-        const searchTools: Tool[] = visibleMetaTools(scopes, enforcement).map(tool => ({
+        const tools: Tool[] = visibleMetaTools(scopes, enforcement).map(tool => ({
             name: tool.name,
             description: tool.description,
             inputSchema: simplifySchemaForOpenAI(tool.inputSchema),
             annotations: tool.annotations,
         }));
-        return { tools: [...searchTools, ...operationTools] };
+        return { tools };
     });
 
     server.setRequestHandler('tools/call', async (request: CallToolRequest, ctx: ServerContext): Promise<CallToolResult> => {
@@ -126,28 +116,22 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
             return result;
         }
 
-        let operationName = toolName;
-        let operationArgs = toolArgs ?? {};
-        let toolDefinition = catalogue.get(toolName);
-
-        if (toolName === READ_OPERATION || toolName === CALL_OPERATION) {
-            const run = resolveRun(toolName, toolArgs ?? {});
-
-            if ('refusal' in run) {
-                observe({ outcome: 'refused', refusal: run.refusal });
-                return { content: [{ type: "text", text: `Error: ${run.message}` }], isError: true };
-            }
-
-            operationName = run.operation.id;
-            operationArgs = run.args;
-            toolDefinition = run.operation.definition;
-        }
-
-        if (!toolDefinition) {
+        if (toolName !== READ_OPERATION && toolName !== CALL_OPERATION) {
             log.warn(`Unknown tool requested: ${toolName}`);
             observe({ outcome: 'refused', refusal: 'unknown_tool' });
-            return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }], isError: true };
+            return { content: [{ type: "text", text: `Error: ${unknownToolMessage(toolName)}` }], isError: true };
         }
+
+        const run = resolveRun(toolName, toolArgs ?? {});
+
+        if ('refusal' in run) {
+            observe({ outcome: 'refused', refusal: run.refusal });
+            return { content: [{ type: "text", text: `Error: ${run.message}` }], isError: true };
+        }
+
+        const operationName = run.operation.id;
+        const operationArgs = run.args;
+        const toolDefinition = run.operation.definition;
         const decision = mayCallTool(operationName, scopes, operationArgs);
 
         if (!decision.allowed && enforcement !== 'off') {

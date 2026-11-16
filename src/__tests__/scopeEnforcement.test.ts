@@ -72,6 +72,11 @@ async function connect(token: string) {
   return { url, sessionId };
 }
 
+/** The names of the tools a tools/list answer lists, in order. */
+function listedNames(body: string): string[] {
+  return [...body.matchAll(/"name":"([a-z_]+)"/g)].map(match => match[1]);
+}
+
 function callTool(url: string, token: string, sessionId: string, name: string, args: Record<string, unknown> = {}) {
   return fetch(url, {
     method: 'POST',
@@ -214,15 +219,10 @@ describe('scope enforcement over HTTP', () => {
     });
     const body = await listed.text();
 
-    expect(body).toContain('get_templates');
-    expect(body).toContain('get_status');
-    expect(body).not.toContain('delete_template');
-    expect(body).not.toContain('generate_document');
-    expect(body).toContain('"name":"read_operation"');
-    expect(body).not.toContain('"name":"call_operation"');
+    expect(listedNames(body)).toEqual(['search_operations', 'describe_operation', 'read_operation']);
   });
 
-  it('offers every tool to a token that carries no scopes', async () => {
+  it('offers all four tools to a token that carries no scopes', async () => {
     process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
     const token = 'user-a.client-1.';
     const { url, sessionId } = await connect(token);
@@ -234,6 +234,6 @@ describe('scope enforcement over HTTP', () => {
     });
     const body = await listed.text();
 
-    expect(body).toContain('delete_workspace');
+    expect(listedNames(body)).toEqual(['search_operations', 'describe_operation', 'read_operation', 'call_operation']);
   });
 });

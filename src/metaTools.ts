@@ -120,6 +120,18 @@ function notGranted(operation: Operation): string {
   return `This connection is not allowed to run "${operation.id}". It needs the "${requiredScope(operation.id)}" permission; reconnect and grant it.`;
 }
 
+/**
+ * What a call to a tool the server does not have hears. An operation's name was its own tool
+ * before the meta-tools, so a client that still calls it learns how to run it now.
+ */
+export function unknownToolMessage(toolName: string): string {
+  const operation = operations.get(toolName);
+
+  return operation
+    ? `There is no tool "${toolName}": it is an operation. Run it with ${runToolOf(operation)}, with the arguments ${DESCRIBE_OPERATION} shows for it.`
+    : `Unknown tool requested: ${toolName}. Find what you need with ${SEARCH_OPERATIONS}.`;
+}
+
 /** The tool that runs an operation. */
 export function runToolOf(operation: Operation): string {
   if (operation.id === RUN_BUILDER_TOOL) {
@@ -259,12 +271,12 @@ export function resolveRun(toolName: string, args: JsonObject): RunResolution {
 
 /**
  * What a scope check covers for one tools/call: the operation a run tool would run, with its
- * arguments, or the tool itself. null for a run the tool handler refuses anyway, so the client
- * hears why instead of being asked to grant a permission the call would not use.
+ * arguments. null for a call that runs no operation, or that the tool handler refuses anyway, so
+ * the client hears why instead of being asked to grant a permission the call would not use.
  */
 export function scopedCallOf(toolName: string, args: JsonObject): { name: string; args: JsonObject } | null {
   if (toolName !== READ_OPERATION && toolName !== CALL_OPERATION) {
-    return { name: toolName, args };
+    return null;
   }
 
   const run = resolveRun(toolName, args);

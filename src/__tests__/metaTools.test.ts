@@ -17,6 +17,7 @@ const {
   metaTools,
   resolveRun,
   runToolOf,
+  scopedCallOf,
   searchOperationsResult,
   visibleMetaTools,
 } = await import('../metaTools.js');
@@ -262,6 +263,23 @@ describe('resolveRun', () => {
   });
 });
 
+describe('scopedCallOf', () => {
+  it('checks the operation a run names, with its arguments', () => {
+    expect(scopedCallOf(CALL_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'add_component' } }))
+      .toEqual({ name: 'run_builder_tool', args: { template_id: 7, tool: 'add_component' } });
+  });
+
+  it.each([
+    [SEARCH_OPERATIONS, { query: 'delete template' }],
+    [DESCRIBE_OPERATION, { ids: ['delete_template'] }],
+    ['delete_template', { templateId: 7 }],
+    [READ_OPERATION, { id: 'delete_template' }],
+    [CALL_OPERATION, { id: 'make_coffee' }],
+  ])('checks nothing for %s %j, which runs no operation', (tool, args) => {
+    expect(scopedCallOf(tool, args)).toBeNull();
+  });
+});
+
 describe('exampleArguments', () => {
   it('fills only the required fields, with the example, the default or the first allowed value', () => {
     expect(exampleArguments({
@@ -349,10 +367,10 @@ describe('exampleArguments', () => {
 });
 
 describe('the server', () => {
-  it('lists the four meta-tools first', async () => {
+  it('lists the four meta-tools, and no operation as a tool of its own', async () => {
     const { tools } = await (await connectedClient()).listTools();
 
-    expect(tools.slice(0, 4).map(tool => tool.name)).toEqual([SEARCH_OPERATIONS, DESCRIBE_OPERATION, READ_OPERATION, CALL_OPERATION]);
+    expect(tools.map(tool => tool.name)).toEqual([SEARCH_OPERATIONS, DESCRIBE_OPERATION, READ_OPERATION, CALL_OPERATION]);
     expect(tools.find(tool => tool.name === CALL_OPERATION)?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
   });
 
@@ -397,6 +415,25 @@ describe('the server', () => {
     expect(result.isError).toBe(true);
     expect(textOf(result as any)).toMatch(/^Invalid arguments for tool 'get_template': templateId/);
     expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('tells a client calling an operation as a tool how to run it now', async () => {
+    const client = await connectedClient();
+
+    const read = await client.callTool({ name: 'get_templates', arguments: {} });
+    const call = await client.callTool({ name: 'delete_template', arguments: { templateId: 7 } });
+
+    expect(read.isError).toBe(true);
+    expect(textOf(read as any)).toBe('Error: There is no tool "get_templates": it is an operation. Run it with read_operation, with the arguments describe_operation shows for it.');
+    expect(textOf(call as any)).toBe('Error: There is no tool "delete_template": it is an operation. Run it with call_operation, with the arguments describe_operation shows for it.');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('refuses a tool it does not have', async () => {
+    const result = await (await connectedClient()).callTool({ name: 'make_coffee', arguments: {} });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result as any)).toBe('Error: Unknown tool requested: make_coffee. Find what you need with search_operations.');
   });
 
   it('refuses a run with the wrong tool before calling the API', async () => {
