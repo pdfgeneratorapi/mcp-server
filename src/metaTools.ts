@@ -237,6 +237,21 @@ export function resolveRun(toolName: string, args: JsonObject): RunResolution {
 }
 
 /**
+ * What a scope check covers for one tools/call: the operation a run tool would run, with its
+ * arguments, or the tool itself. null for a run the tool handler refuses anyway, so the client
+ * hears why instead of being asked to grant a permission the call would not use.
+ */
+export function scopedCallOf(toolName: string, args: JsonObject): { name: string; args: JsonObject } | null {
+  if (toolName !== READ_OPERATION && toolName !== CALL_OPERATION) {
+    return { name: toolName, args };
+  }
+
+  const run = resolveRun(toolName, args);
+
+  return 'refusal' in run ? null : { name: run.operation.id, args: run.args };
+}
+
+/**
  * Arguments that fill every required field of an input schema, with each field's example, default
  * or first allowed value where the schema gives one, and a placeholder otherwise. A union takes
  * its first option.

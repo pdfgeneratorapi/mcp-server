@@ -31,6 +31,7 @@ import { identityKey, limitRequests, loadRateLimits, RateLimiter, tooManyRequest
 import type { AuthInfo } from '@modelcontextprotocol/server';
 import { loadScopeEnforcement, mayCallTool, SUPPORTED_SCOPES } from './auth/scopes.js';
 import { challenges } from './auth/challenges.js';
+import { scopedCallOf } from './metaTools.js';
 import { clientInfoOf, describeRequest, envelopeClientOf, logRequests, logToolCall, type RequestFacts } from './telemetry.js';
 
 // Constants
@@ -290,7 +291,8 @@ class MCPStreamableHttpServer {
   }
   
   /**
-   * The step-up challenge for a single tools/call the grant does not cover.
+   * The step-up challenge for a single tools/call the grant does not cover, or whose operation it
+   * does not cover.
    */
   private scopeRefusal(body: unknown, authInfo: AuthInfo | undefined) {
     if (loadScopeEnforcement() !== 'enforce' || Array.isArray(body)) {
@@ -303,13 +305,19 @@ class MCPStreamableHttpServer {
       return null;
     }
 
-    const decision = mayCallTool(request.params.name, authInfo?.scopes ?? [], request.params.arguments ?? {});
+    const call = scopedCallOf(request.params.name, request.params.arguments ?? {});
+
+    if (call === null) {
+      return null;
+    }
+
+    const decision = mayCallTool(call.name, authInfo?.scopes ?? [], call.args);
 
     if (decision.allowed || decision.required === null) {
       return null;
     }
 
-    log.warn(`Refused "${request.params.name}": the token does not grant "${decision.required}"`);
+    log.warn(`Refused "${call.name}": the token does not grant "${decision.required}"`);
 
     // Clients ask for exactly these scopes, so name the ones already granted too
     return challenges.insufficientScope(this.resourceMetadataUrl, [...new Set([...(authInfo?.scopes ?? []), decision.required])]);
