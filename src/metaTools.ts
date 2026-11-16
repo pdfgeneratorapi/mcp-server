@@ -16,7 +16,7 @@ import {
   type Operation,
   type OperationCategory,
 } from './operations.js';
-import { mayCallTool, requiredScope, visibleTools, type ScopeEnforcement } from './auth/scopes.js';
+import { requiredScope, visibleTools, type ScopeEnforcement } from './auth/scopes.js';
 import { RUN_BUILDER_TOOL } from './builder.js';
 
 export const SEARCH_OPERATIONS = 'search_operations';
@@ -152,27 +152,6 @@ export function grantedOperations(scopes: string[], enforcement: ScopeEnforcemen
   const visible = new Set(visibleTools(scopes));
 
   return all.filter(operation => visible.has(operation.id));
-}
-
-/**
- * The tools a grant can use: search and describe always, read_operation when the grant may run an
- * operation that only reads, and call_operation when it may run one that changes something. A
- * builder run changes something only with templates:write.
- */
-export function visibleMetaTools(scopes: string[], enforcement: ScopeEnforcement): MetaTool[] {
-  const granted = grantedOperations(scopes, enforcement);
-  const canRead = granted.some(operation => operation.readOnly || operation.id === RUN_BUILDER_TOOL);
-  const canChange = granted.some(operation => operation.id === RUN_BUILDER_TOOL
-    ? enforcement === 'off' || mayCallTool(RUN_BUILDER_TOOL, scopes, {}).allowed
-    : !operation.readOnly);
-
-  return [...metaTools.values()].filter(tool => {
-    if (tool.name === READ_OPERATION) {
-      return canRead;
-    }
-
-    return tool.name !== CALL_OPERATION || canChange;
-  });
 }
 
 export function searchOperationsResult(args: JsonObject, granted: Operation[]): CallToolResult {

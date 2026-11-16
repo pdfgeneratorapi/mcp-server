@@ -21,7 +21,7 @@
 
 ### Changed
 
-- Permissions apply to operations: a search finds only the operations the connection's grant allows, `call_operation` is not listed for a grant that can change nothing, and a run outside the grant is answered with the `insufficient_scope` step-up challenge for the permission its operation needs.
+- Permissions apply to operations: a search finds only the operations the connection's grant allows, and a run outside the grant is answered with the `insufficient_scope` step-up challenge for the permission its operation needs. All four tools are listed whatever the grant, so a read-only connection can still be asked for a permission it lacks.
 - The log line of a `read_operation` or `call_operation` call names the operation it ran in `operation`, and the builder tool a builder run ran in `builder_tool`. Log queries that counted calls by `tool` count them by `operation` now. A search's query is not logged, like every other argument.
 - The server instructions and the `generate-pdf`, `convert-to-pdf` and `create-einvoice` prompts guide clients through the four tools. They ask for a document as a link (`output` `url` or `viewer`) only when the user wants one, because a link stores the document for 30 days; `generate-pdf` no longer asks for `url` by default.
 - The generate tools offer `format` `pdf` and `html` only, as the API's spec does: `xlsx` and `zip` are deprecated, and the tools now refuse them before they reach the API.

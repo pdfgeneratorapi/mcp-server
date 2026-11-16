@@ -17,9 +17,9 @@ import {
     describeOperationsResult,
     grantedOperations,
     resolveRun,
+    metaTools,
     searchOperationsResult,
     unknownToolMessage,
-    visibleMetaTools,
 } from './metaTools.js';
 import { executeApiTool } from './execute.js';
 import { isEndedGrant, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
@@ -96,10 +96,10 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         }
     );
 
-    server.setRequestHandler('tools/list', async (_request, ctx) => {
-        const enforcement = loadScopeEnforcement();
-        const scopes = ctx.http?.authInfo?.scopes ?? [];
-        const tools: Tool[] = visibleMetaTools(scopes, enforcement).map(tool => ({
+    // All four are listed whatever the grant: search finds only what the grant allows, and a run
+    // outside it is answered with the step-up challenge that lets the user grant the permission.
+    server.setRequestHandler('tools/list', async () => {
+        const tools: Tool[] = Array.from(metaTools.values()).map(tool => ({
             name: tool.name,
             description: tool.description,
             inputSchema: simplifySchemaForOpenAI(tool.inputSchema),

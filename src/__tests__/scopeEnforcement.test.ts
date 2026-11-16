@@ -207,7 +207,8 @@ describe('scope enforcement over HTTP', () => {
     expect(body).not.toContain('delete_template');
   });
 
-  it('offers a template-read client only the tools it may call', async () => {
+  /** A write the grant does not cover reaches the step-up challenge only through call_operation. */
+  it('offers a template-read client all four tools', async () => {
     process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
     const token = 'user-a.client-1.templates~read';
     const { url, sessionId } = await connect(token);
@@ -219,7 +220,7 @@ describe('scope enforcement over HTTP', () => {
     });
     const body = await listed.text();
 
-    expect(listedNames(body)).toEqual(['search_operations', 'describe_operation', 'read_operation']);
+    expect(listedNames(body)).toEqual(['search_operations', 'describe_operation', 'read_operation', 'call_operation']);
   });
 
   it('offers all four tools to a token that carries no scopes', async () => {

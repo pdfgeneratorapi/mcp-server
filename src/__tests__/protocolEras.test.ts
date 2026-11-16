@@ -157,13 +157,13 @@ describe('the 2026-07-28 revision', () => {
     }));
   });
 
-  it('lists only the tools the grant covers', async () => {
+  it('lists all four tools to a read-only grant', async () => {
     process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
     const { client } = await connect('user-1.client-1.templates~read', { pin: MODERN });
 
     const names = (await client.listTools()).tools.map(tool => tool.name);
 
-    expect(names).toEqual(['search_operations', 'describe_operation', 'read_operation']);
+    expect(names).toEqual(['search_operations', 'describe_operation', 'read_operation', 'call_operation']);
   });
 
   it('answers a call outside the grant with the step-up challenge', async () => {
