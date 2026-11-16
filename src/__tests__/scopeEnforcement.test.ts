@@ -162,7 +162,7 @@ describe('scope enforcement over HTTP', () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('\\"delete_template\\" changes data, so run it with call_operation.');
+    expect(body).toContain('\\"delete_template\\" deletes data, so run it with call_operation.');
     expect(mockAxios).not.toHaveBeenCalled();
   });
 

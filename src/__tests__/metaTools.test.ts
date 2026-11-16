@@ -64,7 +64,7 @@ describe('the meta-tools', () => {
     expect(runToolOf(operation('preview_template'))).toBe('read_operation');
     expect(runToolOf(operation('delete_template'))).toBe('call_operation');
     expect(runToolOf(operation('convert_html_to_pdf'))).toBe('call_operation');
-    expect(runToolOf(operation('run_builder_tool'))).toBe('call_operation, or read_operation for a builder tool that only reads');
+    expect(runToolOf(operation('run_builder_tool'))).toBe('call_operation, or read_operation for a call that only reads');
   });
 });
 
@@ -245,10 +245,9 @@ describe('resolveRun', () => {
   });
 
   it.each([
-    [READ_OPERATION, { id: 'delete_template' }, 'wrong_run_tool', '"delete_template" changes data, so run it with call_operation.'],
-    [CALL_OPERATION, { id: 'get_templates' }, 'wrong_run_tool', '"get_templates" only reads, so run it with read_operation.'],
+    [READ_OPERATION, { id: 'delete_template' }, 'wrong_run_tool', '"delete_template" deletes data, so run it with call_operation.'],
+    [READ_OPERATION, { id: 'update_template' }, 'wrong_run_tool', '"update_template" changes data, so run it with call_operation.'],
     [READ_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'add_component' } }, 'wrong_run_tool', '"run_builder_tool" changes data, so run it with call_operation.'],
-    [CALL_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'list_pages' } }, 'wrong_run_tool', '"run_builder_tool" only reads, so run it with read_operation.'],
     [CALL_OPERATION, { id: 'make_coffee' }, 'unknown_operation', 'There is no operation "make_coffee". Find one with search_operations.'],
     [CALL_OPERATION, {}, 'invalid_arguments', 'Give the ID of an operation, from search_operations.'],
     [CALL_OPERATION, { id: '' }, 'invalid_arguments', 'Give the ID of an operation, from search_operations.'],
@@ -261,6 +260,13 @@ describe('resolveRun', () => {
     expect(resolveRun(READ_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'list_pages' } }))
       .toMatchObject({ operation: operation('run_builder_tool') });
     expect(resolveRun(CALL_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'add_component' } }))
+      .toMatchObject({ operation: operation('run_builder_tool') });
+  });
+
+  /** Running a read through a tool clients ask about protects nothing, so it is not refused. */
+  it('runs what only reads through call_operation too', () => {
+    expect(resolveRun(CALL_OPERATION, { id: 'get_templates' })).toEqual({ operation: operation('get_templates'), args: {} });
+    expect(resolveRun(CALL_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'list_pages' } }))
       .toMatchObject({ operation: operation('run_builder_tool') });
   });
 });
@@ -454,7 +460,7 @@ describe('the server', () => {
     const result = await client.callTool({ name: READ_OPERATION, arguments: { id: 'delete_template', arguments: { templateId: 7 } } });
 
     expect(result.isError).toBe(true);
-    expect(textOf(result as any)).toBe('Error: "delete_template" changes data, so run it with call_operation.');
+    expect(textOf(result as any)).toBe('Error: "delete_template" deletes data, so run it with call_operation.');
     expect(mockAxios).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,7 @@
  * run on the client's own model. Three tools reach it, so a client loads the builder's catalogue
  * only when it builds a template.
  */
-import type { McpToolDefinition } from './types.js';
+import type { JsonObject, McpToolDefinition } from './types.js';
 import { BUILDER_BASE_URL } from './config.js';
 
 export const GET_BUILDER_GUIDE = 'get_builder_guide';
@@ -77,5 +77,6 @@ export const builderToolDefinitionMap: Map<string, McpToolDefinition> = new Map(
     executionParameters: [{ name: 'template_id', in: 'path' }, { name: 'tool', in: 'path' }],
     requestBodyContentType: 'application/json',
     baseUrl: BUILDER_BASE_URL,
+    readOnlyCall: (args: JsonObject) => !builderToolChangesTemplate(args.tool),
   }],
 ]);

@@ -10,15 +10,16 @@ import {
   CATEGORIES,
   DEFAULT_SEARCH_LIMIT,
   MAX_SEARCH_LIMIT,
-  isReadOnlyCall,
+  LEVELS,
+  callLevel,
   operations,
   rankOperations,
   searchLimit,
   type Operation,
   type OperationCategory,
+  type OperationLevel,
 } from './operations.js';
 import { requiredScope, visibleTools, type ScopeEnforcement } from './auth/scopes.js';
-import { RUN_BUILDER_TOOL } from './builder.js';
 
 export const SEARCH_OPERATIONS = 'search_operations';
 export const DESCRIBE_OPERATION = 'describe_operation';
@@ -134,13 +135,36 @@ export function unknownToolMessage(toolName: string): string {
     : `Unknown tool requested: ${toolName}. Find what you need with ${SEARCH_OPERATIONS}.`;
 }
 
+/** The most each run tool runs: any operation at that level or below. */
+const RUN_TOOL_LEVELS: Record<string, OperationLevel> = {
+  [READ_OPERATION]: 'read',
+  [CALL_OPERATION]: 'delete',
+};
+
+/** The run tool an operation of each level is meant for: the least one that runs it. */
+const RUN_TOOL_FOR: Record<OperationLevel, string> = {
+  read: READ_OPERATION,
+  write: CALL_OPERATION,
+  delete: CALL_OPERATION,
+};
+
+const LEVEL_DOES: Record<OperationLevel, string> = {
+  read: 'only reads',
+  write: 'changes data',
+  delete: 'deletes data',
+};
+
+export function isRunTool(toolName: string): boolean {
+  return toolName in RUN_TOOL_LEVELS;
+}
+
 /** The tool that runs an operation. */
 export function runToolOf(operation: Operation): string {
-  if (operation.id === RUN_BUILDER_TOOL) {
-    return `${CALL_OPERATION}, or ${READ_OPERATION} for a builder tool that only reads`;
-  }
+  const runTool = RUN_TOOL_FOR[operation.level];
 
-  return operation.readOnly ? READ_OPERATION : CALL_OPERATION;
+  return operation.definition.readOnlyCall && runTool !== READ_OPERATION
+    ? `${runTool}, or ${READ_OPERATION} for a call that only reads`
+    : runTool;
 }
 
 /** The operations a grant may run: all of them when scopes are not enforced. */
@@ -251,14 +275,12 @@ export function resolveRun(toolName: string, args: JsonObject): RunResolution {
     return { refusal: 'invalid_arguments', message: `arguments must be an object, as ${DESCRIBE_OPERATION} shows for "${id}".` };
   }
 
-  const readOnly = isReadOnlyCall(operation, operationArgs);
+  const level = callLevel(operation, operationArgs);
 
-  if (toolName === READ_OPERATION && !readOnly) {
-    return { refusal: 'wrong_run_tool', message: `"${id}" changes data, so run it with ${CALL_OPERATION}.` };
-  }
-
-  if (toolName === CALL_OPERATION && readOnly) {
-    return { refusal: 'wrong_run_tool', message: `"${id}" only reads, so run it with ${READ_OPERATION}.` };
+  // A run tool runs anything at its level or below: a read through call_operation is only asked
+  // about more than it needs to be. One above its level would skip the client's confirmation.
+  if (LEVELS.indexOf(level) > LEVELS.indexOf(RUN_TOOL_LEVELS[toolName] ?? 'read')) {
+    return { refusal: 'wrong_run_tool', message: `"${id}" ${LEVEL_DOES[level]}, so run it with ${RUN_TOOL_FOR[level]}.` };
   }
 
   return { operation, args: operationArgs };
@@ -270,7 +292,7 @@ export function resolveRun(toolName: string, args: JsonObject): RunResolution {
  * the client hears why instead of being asked to grant a permission the call would not use.
  */
 export function scopedCallOf(toolName: string, args: JsonObject): { name: string; args: JsonObject } | null {
-  if (toolName !== READ_OPERATION && toolName !== CALL_OPERATION) {
+  if (!isRunTool(toolName)) {
     return null;
   }
 

@@ -4,7 +4,7 @@ import {
   estimateTokens,
   rankOperations,
   searchLimit,
-  isReadOnlyCall,
+  callLevel,
   operations,
   searchOperations,
   type Operation,
@@ -63,11 +63,12 @@ describe('the operation index', () => {
     expect(operation(id).category).toBe(category);
   });
 
-  it('takes the title and whether it only reads from the annotations', () => {
-    expect(operation('get_templates')).toMatchObject({ title: 'List Templates', readOnly: true });
-    expect(operation('preview_template')).toMatchObject({ title: 'Preview Template Pages', readOnly: true });
-    expect(operation('delete_template')).toMatchObject({ title: 'Delete Template', readOnly: false });
-    expect(operation('run_builder_tool').readOnly).toBe(false);
+  it('takes the title and the level from the annotations: read-only, destructive, or neither', () => {
+    expect(operation('get_templates')).toMatchObject({ title: 'List Templates', level: 'read' });
+    expect(operation('preview_template')).toMatchObject({ title: 'Preview Template Pages', level: 'read' });
+    expect(operation('generate_document')).toMatchObject({ title: 'Generate PDF Document', level: 'write' });
+    expect(operation('delete_template')).toMatchObject({ title: 'Delete Template', level: 'delete' });
+    expect(operation('run_builder_tool').level).toBe('write');
   });
 
   it('estimates tokens at four characters a token', () => {
@@ -83,23 +84,24 @@ describe('the operation index', () => {
   });
 });
 
-describe('which calls only read', () => {
-  it('follows the operation for anything but the builder', () => {
-    expect(isReadOnlyCall(operation('get_template'), {})).toBe(true);
-    expect(isReadOnlyCall(operation('update_template'), {})).toBe(false);
+describe('what one call does', () => {
+  it('is the operation\'s level, for an operation whose arguments do not decide it', () => {
+    expect(callLevel(operation('get_template'), {})).toBe('read');
+    expect(callLevel(operation('update_template'), {})).toBe('write');
+    expect(callLevel(operation('delete_workspace'), {})).toBe('delete');
   });
 
   it.each([
-    ['get_template_structure', true],
-    ['list_components', true],
-    ['validate_template', true],
-    ['add_component', false],
-    ['remove_page', false],
-    ['a_tool_added_later', false],
-    [undefined, false],
-    [42, false],
-  ])('counts a builder run of %s as a read: %s', (tool, readOnly) => {
-    expect(isReadOnlyCall(operation('run_builder_tool'), { template_id: 1, tool })).toBe(readOnly);
+    ['get_template_structure', 'read'],
+    ['list_components', 'read'],
+    ['validate_template', 'read'],
+    ['add_component', 'write'],
+    ['remove_page', 'write'],
+    ['a_tool_added_later', 'write'],
+    [undefined, 'write'],
+    [42, 'write'],
+  ])('is a read for a builder run of %s only when the builder tool only reads: %s', (tool, level) => {
+    expect(callLevel(operation('run_builder_tool'), { template_id: 1, tool })).toBe(level);
   });
 });
 

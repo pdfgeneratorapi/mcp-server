@@ -16,8 +16,9 @@ import {
     SEARCH_OPERATIONS,
     describeOperationsResult,
     grantedOperations,
-    resolveRun,
+    isRunTool,
     metaTools,
+    resolveRun,
     notGrantedMessage,
     searchOperationsResult,
     unknownToolMessage,
@@ -129,7 +130,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
             return result;
         }
 
-        if (toolName !== READ_OPERATION && toolName !== CALL_OPERATION) {
+        if (!isRunTool(toolName)) {
             log.warn(`Unknown tool requested: ${toolName}`);
             observe({ outcome: 'refused', refusal: 'unknown_tool' });
             return { content: [{ type: "text", text: `Error: ${unknownToolMessage(toolName)}` }], isError: true };

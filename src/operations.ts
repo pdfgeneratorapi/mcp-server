@@ -6,7 +6,6 @@ import type { McpToolDefinition } from './types.js';
 import { catalogue } from './catalogue.js';
 import { toolAnnotations } from './annotations.js';
 import { requiredScope } from './auth/scopes.js';
-import { RUN_BUILDER_TOOL, builderToolChangesTemplate } from './builder.js';
 
 /**
  * How a search narrows the catalogue: the scope families, and status for the health check, which
@@ -14,6 +13,10 @@ import { RUN_BUILDER_TOOL, builderToolChangesTemplate } from './builder.js';
  */
 export const CATEGORIES = ['templates', 'documents', 'workspaces', 'forms', 'pdf', 'einvoice', 'status'] as const;
 export type OperationCategory = typeof CATEGORIES[number];
+
+/** What an operation does, from least to most: it reads, it changes something, or it deletes. */
+export const LEVELS = ['read', 'write', 'delete'] as const;
+export type OperationLevel = typeof LEVELS[number];
 
 export const DEFAULT_SEARCH_LIMIT = 10;
 export const MAX_SEARCH_LIMIT = 25;
@@ -80,7 +83,7 @@ export interface Operation {
   id: string;
   category: OperationCategory;
   title: string;
-  readOnly: boolean;
+  level: OperationLevel;
   /**
    * Roughly how many tokens the operation's input schema takes, at four characters a token: the
    * whole schema, as describe_operation returns it.
@@ -134,7 +137,7 @@ function toOperation(definition: McpToolDefinition): Operation {
     id: definition.name,
     category: categoryOf(definition.name),
     title: annotations.title,
-    readOnly: annotations.readOnlyHint === true,
+    level: annotations.readOnlyHint === true ? 'read' : annotations.destructiveHint === true ? 'delete' : 'write',
     schemaTokens: estimateTokens(definition.inputSchema),
     definition,
   };
@@ -157,15 +160,17 @@ const index: Map<string, IndexedOperation> = new Map(
 );
 
 /**
- * Whether one call only reads: an operation that only reads, or a builder tool run that only
- * reads the template.
+ * What one call does: the operation's level, or, for an operation whose arguments decide, a read
+ * when the call only reads.
  */
-export function isReadOnlyCall(operation: Operation, args: Record<string, unknown> = {}): boolean {
-  if (operation.id === RUN_BUILDER_TOOL) {
-    return !builderToolChangesTemplate(args.tool);
+export function callLevel(operation: Operation, args: Record<string, unknown> = {}): OperationLevel {
+  const { readOnlyCall } = operation.definition;
+
+  if (readOnlyCall) {
+    return readOnlyCall(args) ? 'read' : operation.level;
   }
 
-  return operation.readOnly;
+  return operation.level;
 }
 
 /** 1 for the same word, less for a plural or a prefix, 0 for anything else. */

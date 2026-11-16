@@ -7,7 +7,7 @@ import type { MiddlewareHandler } from 'hono';
 import { CLIENT_INFO_META_KEY, PROTOCOL_VERSION_META_KEY, type AuthInfo } from '@modelcontextprotocol/server';
 import { log } from './logger.js';
 import { RUN_BUILDER_TOOL } from './builder.js';
-import { CALL_OPERATION, READ_OPERATION } from './metaTools.js';
+import { isRunTool } from './metaTools.js';
 import { operations } from './operations.js';
 
 export const REQUEST_MESSAGE = 'MCP request';
@@ -109,7 +109,7 @@ export function describeRequest(body: unknown): Pick<RequestFacts, 'method' | 't
 export function operationOf(tool: string, args: unknown): string | undefined {
   const operation = (args as { id?: unknown } | null | undefined)?.id;
 
-  return (tool === READ_OPERATION || tool === CALL_OPERATION) && typeof operation === 'string' && operations.has(operation)
+  return isRunTool(tool) && typeof operation === 'string' && operations.has(operation)
     ? operation
     : undefined;
 }
