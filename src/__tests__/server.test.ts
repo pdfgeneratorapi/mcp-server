@@ -81,7 +81,7 @@ describe('createMcpServer', () => {
 
       const result = await client.listTools();
 
-      expect(result.tools.length).toBe(catalogue.size);
+      expect(result.tools.length).toBe(catalogue.size + 4);
       for (const tool of result.tools) {
         expect(tool.name).toBeDefined();
         expect(tool.description).toBeDefined();

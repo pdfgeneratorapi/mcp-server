@@ -11,6 +11,17 @@ import { log } from './logger.js';
 import { simplifySchemaForOpenAI } from './schema.js';
 import { catalogue } from './catalogue.js';
 import { toolAnnotations } from './annotations.js';
+import {
+    CALL_OPERATION,
+    DESCRIBE_OPERATION,
+    READ_OPERATION,
+    SEARCH_OPERATIONS,
+    describeOperationsResult,
+    grantedOperations,
+    metaTools,
+    resolveRun,
+    searchOperationsResult,
+} from './metaTools.js';
 import { executeApiTool } from './execute.js';
 import { isEndedGrant, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
 import { loadScopeEnforcement, mayCallTool, visibleTools } from './auth/scopes.js';
@@ -78,7 +89,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         const enforcement = loadScopeEnforcement();
         const scopes = ctx.http?.authInfo?.scopes ?? [];
         const allowed = enforcement === 'off' ? null : new Set(visibleTools(scopes));
-        const toolsForClient: Tool[] = Array.from(catalogue.values())
+        const operationTools: Tool[] = Array.from(catalogue.values())
             .filter(def => allowed === null || allowed.has(def.name))
             .map(def => ({
             name: def.name,
@@ -86,7 +97,13 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
             inputSchema: simplifySchemaForOpenAI(def.inputSchema),
             annotations: toolAnnotations[def.name],
         }));
-        return { tools: toolsForClient };
+        const searchTools: Tool[] = Array.from(metaTools.values()).map(tool => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: simplifySchemaForOpenAI(tool.inputSchema),
+            annotations: tool.annotations,
+        }));
+        return { tools: [...searchTools, ...operationTools] };
     });
 
     server.setRequestHandler('tools/call', async (request: CallToolRequest, ctx: ServerContext): Promise<CallToolResult> => {
@@ -96,22 +113,49 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         const builderTool = builderToolOf(toolName, toolArgs);
         const observe = (details: Omit<ToolCallRecord, 'tool' | 'builderTool' | 'durationMs'>) =>
             onToolCall?.({ tool: toolName, builderTool, durationMs: elapsedSince(startedAt), ...details }, extra);
-        const toolDefinition = catalogue.get(toolName);
+        const enforcement = loadScopeEnforcement();
+        const scopes = extra.authInfo?.scopes ?? [];
+
+        if (toolName === SEARCH_OPERATIONS || toolName === DESCRIBE_OPERATION) {
+            const granted = grantedOperations(scopes, enforcement);
+            const result = toolName === SEARCH_OPERATIONS
+                ? searchOperationsResult(toolArgs ?? {}, granted)
+                : describeOperationsResult(toolArgs ?? {}, granted);
+            observe({ outcome: result.isError ? 'error' : 'ok' });
+            return result;
+        }
+
+        let operationName = toolName;
+        let operationArgs = toolArgs ?? {};
+        let toolDefinition = catalogue.get(toolName);
+
+        if (toolName === READ_OPERATION || toolName === CALL_OPERATION) {
+            const run = resolveRun(toolName, toolArgs ?? {});
+
+            if ('refusal' in run) {
+                observe({ outcome: 'refused', refusal: run.refusal });
+                return { content: [{ type: "text", text: `Error: ${run.message}` }], isError: true };
+            }
+
+            operationName = run.operation.id;
+            operationArgs = run.args;
+            toolDefinition = run.operation.definition;
+        }
+
         if (!toolDefinition) {
             log.warn(`Unknown tool requested: ${toolName}`);
             observe({ outcome: 'refused', refusal: 'unknown_tool' });
             return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }], isError: true };
         }
-        const enforcement = loadScopeEnforcement();
-        const decision = mayCallTool(toolName, extra.authInfo?.scopes ?? [], toolArgs ?? {});
+        const decision = mayCallTool(operationName, scopes, operationArgs);
 
         if (!decision.allowed && enforcement !== 'off') {
-            log.warn(`Tool "${toolName}" needs scope "${decision.required}", which this token does not grant`);
+            log.warn(`Tool "${operationName}" needs scope "${decision.required}", which this token does not grant`);
 
             if (enforcement === 'enforce') {
                 observe({ outcome: 'refused', refusal: 'insufficient_scope' });
                 return {
-                    content: [{ type: "text", text: `Error: this connection is not allowed to call "${toolName}". It needs the "${decision.required}" permission; reconnect and grant it.` }],
+                    content: [{ type: "text", text: `Error: this connection is not allowed to call "${operationName}". It needs the "${decision.required}" permission; reconnect and grant it.` }],
                     isError: true,
                 };
             }
@@ -131,7 +175,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
             invalidate: () => credentials.invalidate(extra.authInfo),
         };
         let upstreamStatus: number | undefined;
-        const result = await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, upstreamAuth, (status) => {
+        const result = await executeApiTool(operationName, toolDefinition, operationArgs, upstreamAuth, (status) => {
             upstreamStatus = status;
         });
         observe(ended
