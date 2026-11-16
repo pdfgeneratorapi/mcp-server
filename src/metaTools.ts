@@ -100,7 +100,7 @@ export const metaTools: Map<string, MetaTool> = new Map([
   }],
   [CALL_OPERATION, {
     name: CALL_OPERATION,
-    description: `Runs an operation that creates, changes or deletes something, or that generates or converts a document: create or update a template, generate a document, convert HTML to PDF, delete a workspace, or run a template builder tool that changes the template. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them. Ask for a document as a link (output: url) only when the user wants one: a link stores the document for 30 days. An operation that only reads runs with ${READ_OPERATION}.`,
+    description: `Runs an operation that creates, changes or deletes something, or that generates or converts a document: create or update a template, generate a document, convert HTML to PDF, delete a workspace, or run a template builder tool that changes the template. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them. Ask for a document as a link (output url or viewer) only when the user wants one: a link stores the document for 30 days. An operation that only reads runs with ${READ_OPERATION}.`,
     inputSchema: runInputSchema,
     annotations: { title: 'Run an Operation', readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   }],
