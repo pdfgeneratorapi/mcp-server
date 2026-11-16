@@ -188,7 +188,7 @@ if (accessToken) {
 }
 
 if (accessToken) {
-  await step(`a ${LEGACY_VERSION} client opens a session, lists the tools and calls get_status`, async () => {
+  await step(`a ${LEGACY_VERSION} client opens a session, lists the tools and runs get_status`, async () => {
     const opened = await fetch(MCP_URL, {
       method: 'POST',
       headers: mcpHeaders(accessToken),
@@ -202,7 +202,8 @@ if (accessToken) {
 
     await fetch(MCP_URL, { method: 'POST', headers: session, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) });
     const tools = await rpcResult(await fetch(MCP_URL, { method: 'POST', headers: session, body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }) }));
-    const call = await rpcResult(await fetch(MCP_URL, { method: 'POST', headers: session, body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_status', arguments: {} } }) }));
+    const call = await rpcResult(await fetch(MCP_URL, { method: 'POST', headers: session, body: JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'read_operation', arguments: { id: 'get_status' } } }) }));
+    expect(tools.tools.some(tool => tool.name === 'search_operations'), 'search_operations is not listed');
     expect(!call.isError, `get_status failed: ${call.content?.[0]?.text}`);
     const closed = await fetch(MCP_URL, { method: 'DELETE', headers: session });
     expect(closed.status === 204, `closing the session answered ${closed.status}`);
@@ -210,7 +211,7 @@ if (accessToken) {
     return `${negotiated}, ${tools.tools.length} tools`;
   });
 
-  await step(`a ${MODERN_VERSION} client discovers the server, lists the tools and calls get_status`, async () => {
+  await step(`a ${MODERN_VERSION} client discovers the server, lists the tools and runs get_status`, async () => {
     const meta = {
       'io.modelcontextprotocol/protocolVersion': MODERN_VERSION,
       'io.modelcontextprotocol/clientInfo': CLIENT_INFO,
@@ -231,7 +232,8 @@ if (accessToken) {
     expect(!discovered.headers.get('mcp-session-id'), 'a session was opened');
     expect((await rpcResult(discovered)).supportedVersions?.includes(MODERN_VERSION), `${MODERN_VERSION} is not supported`);
     const tools = await rpcResult(await request(2, 'tools/list'));
-    const call = await rpcResult(await request(3, 'tools/call', { name: 'get_status', arguments: {} }));
+    const call = await rpcResult(await request(3, 'tools/call', { name: 'read_operation', arguments: { id: 'get_status' } }));
+    expect(tools.tools.some(tool => tool.name === 'search_operations'), 'search_operations is not listed');
     expect(!call.isError, `get_status failed: ${call.content?.[0]?.text}`);
 
     return `${tools.tools.length} tools`;
