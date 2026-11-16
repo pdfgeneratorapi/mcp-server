@@ -265,6 +265,96 @@ describe('request telemetry', () => {
     expect(output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n')).not.toContain(argument);
   });
 
+  it('names the operation a call_operation run ran', async () => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{}') });
+    const token = 'user-7.client-1.templates~delete';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'call_operation', { id: 'delete_template', arguments: { templateId: 1 } });
+
+    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
+      tool: 'call_operation',
+      operation: 'delete_template',
+      outcome: 'ok',
+      upstream_status: 200,
+    })]);
+  });
+
+  it('names the operation of a run refused for its scope', async () => {
+    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
+    const token = 'user-7.client-1.templates~read';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'call_operation', { id: 'delete_template', arguments: { templateId: 1 } });
+
+    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
+      tool: 'call_operation',
+      operation: 'delete_template',
+      status: 403,
+      outcome: 'refused',
+      refusal: 'insufficient_scope',
+    })]);
+  });
+
+  it('names the operation of a run sent to the wrong tool', async () => {
+    const token = 'user-7.client-1.templates~delete';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'read_operation', { id: 'delete_template', arguments: { templateId: 1 } });
+
+    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
+      tool: 'read_operation',
+      operation: 'delete_template',
+      outcome: 'refused',
+      refusal: 'wrong_run_tool',
+    })]);
+  });
+
+  it('names the builder tool of a builder run made through call_operation', async () => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"response":{"status":"ok"}}') });
+    const token = 'user-7.client-1.templates~write';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'call_operation', {
+      id: 'run_builder_tool',
+      arguments: { template_id: 1, tool: 'add_component' },
+    });
+
+    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
+      tool: 'call_operation',
+      operation: 'run_builder_tool',
+      builder_tool: 'add_component',
+      outcome: 'ok',
+    })]);
+  });
+
+  it('logs a search without its query', async () => {
+    const token = 'user-7.client-1.templates~read';
+    const query = 'invoice for a customer';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'search_operations', { query });
+
+    const call = requestLines().find(line => line.method === 'tools/call');
+    expect(call).toEqual(expect.objectContaining({ tool: 'search_operations', outcome: 'ok' }));
+    expect(call).not.toHaveProperty('operation');
+    expect(output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n')).not.toContain(query);
+  });
+
+  /** The operation is an argument too: only a value shaped like an operation name is logged. */
+  it('leaves out an operation value that is not an operation name, and the operation arguments', async () => {
+    const token = 'user-7.client-1.templates~write';
+    const argument = 'Quarterly invoice for a customer';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'call_operation', { id: argument, arguments: { name: argument } });
+
+    const call = requestLines().find(line => line.method === 'tools/call');
+    expect(call).toEqual(expect.objectContaining({ tool: 'call_operation', refusal: 'unknown_operation' }));
+    expect(call).not.toHaveProperty('operation');
+    expect(output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n')).not.toContain(argument);
+  });
+
   it('logs a request without a token', async () => {
     const url = await start();
 

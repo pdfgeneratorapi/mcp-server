@@ -25,7 +25,7 @@ import {
 import { executeApiTool } from './execute.js';
 import { isEndedGrant, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
 import { loadScopeEnforcement, mayCallTool, visibleTools } from './auth/scopes.js';
-import { builderToolOf, elapsedSince, type ToolCallRecord } from './telemetry.js';
+import { builderToolOf, elapsedSince, operationOf, type ToolCallRecord } from './telemetry.js';
 import type { AuthInfo } from '@modelcontextprotocol/server';
 
 /** Told how each tool call went, once it has an outcome. */
@@ -110,9 +110,10 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         const extra = { authInfo: ctx.http?.authInfo, sessionId: ctx.sessionId };
         const startedAt = performance.now();
         const { name: toolName, arguments: toolArgs } = request.params;
+        const operation = operationOf(toolName, toolArgs);
         const builderTool = builderToolOf(toolName, toolArgs);
-        const observe = (details: Omit<ToolCallRecord, 'tool' | 'builderTool' | 'durationMs'>) =>
-            onToolCall?.({ tool: toolName, builderTool, durationMs: elapsedSince(startedAt), ...details }, extra);
+        const observe = (details: Omit<ToolCallRecord, 'tool' | 'operation' | 'builderTool' | 'durationMs'>) =>
+            onToolCall?.({ tool: toolName, operation, builderTool, durationMs: elapsedSince(startedAt), ...details }, extra);
         const enforcement = loadScopeEnforcement();
         const scopes = extra.authInfo?.scopes ?? [];
 
