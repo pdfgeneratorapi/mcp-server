@@ -11,6 +11,7 @@ import { log } from './logger.js';
 import { simplifySchemaForOpenAI } from './schema.js';
 import {
     CALL_OPERATION,
+    DELETE_OPERATION,
     DESCRIBE_OPERATION,
     READ_OPERATION,
     SEARCH_OPERATIONS,
@@ -41,7 +42,7 @@ const ENDED_CONNECTION_MESSAGE = 'This connection has ended: it was revoked, has
  */
 const SERVER_INSTRUCTIONS = [
     "This MCP server wraps the PDF Generator API v4: generate PDF documents from templates, manage templates and workspaces, convert HTML or a URL to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and work on PDFs: watermark, encrypt, optimize, add accessibility tags, fill form fields.",
-    `Its operations are not tools of their own. Find the ones for a task with ${SEARCH_OPERATIONS}, which lists each match's ID, the tool that runs it and how many tokens its schema costs. Read the arguments of the ones you will run with ${DESCRIBE_OPERATION}, then run each with ${READ_OPERATION} if it only reads, or with ${CALL_OPERATION} if it creates, changes or deletes something. An operation named here can be described without searching for it first.`,
+    `Its operations are not tools of their own. Find the ones for a task with ${SEARCH_OPERATIONS}, which lists each match's ID, the tool that runs it and how many tokens its schema costs. Read the arguments of the ones you will run with ${DESCRIBE_OPERATION}, then run each with ${READ_OPERATION} if it only reads, ${CALL_OPERATION} if it creates or changes something, or ${DELETE_OPERATION} if it deletes something. An operation named here can be described without searching for it first.`,
     "To generate a document, list the templates with get_templates and run generate_document. To build or restyle a template step by step, or change a few of its components without resending it, read get_builder_guide, list the steps with list_builder_tools and apply them with run_builder_tool. To see how a template looks, saved or not, run preview_template: it shows up to 3 of its pages as images, free and stored nowhere; show_pdf_pages does the same for a PDF you already have. Don't generate a document just to look at it: generate_document uses credits. Ask for a document as a link (output url or viewer) only when the user wants a link: a link stores the document for 30 days.",
     "To read a template only for its structure, pass images: omit to get_template, get_template_version, get_template_library_item or get_template_library_items: every embedded image is replaced by a short marker naming its type and size. A saved template read that way is changed with run_builder_tool, which keeps its images; a definition that still carries a marker is refused wherever it is sent, so to base a new template on a library template, read that one with its images. To open several library templates, use get_template_library_items with up to 5 ids at once, with images: omit unless the images are needed. To size a text box, measure its text with measure_text, up to 20 texts at once: it returns the lines a text breaks into at a width and its height, as the PDF draws them, so the box is neither cut nor too tall. Take every fontFamily from list_fonts.",
     `The connection acts in the workspace the user chose when connecting, with the permissions they granted: ${SEARCH_OPERATIONS} finds only the operations those permissions allow.`,
@@ -98,7 +99,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         }
     );
 
-    // All four are listed whatever the grant: search finds only what the grant allows, and a run
+    // All five are listed whatever the grant: search finds only what the grant allows, and a run
     // outside it is answered with the step-up challenge that lets the user grant the permission.
     server.setRequestHandler('tools/list', async () => {
         const tools: Tool[] = Array.from(metaTools.values()).map(tool => ({

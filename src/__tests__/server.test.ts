@@ -80,7 +80,7 @@ describe('createMcpServer', () => {
 
       const result = await client.listTools();
 
-      expect(result.tools.map((tool) => tool.name)).toEqual(['search_operations', 'describe_operation', 'read_operation', 'call_operation']);
+      expect(result.tools.map((tool) => tool.name)).toEqual(['search_operations', 'describe_operation', 'read_operation', 'call_operation', 'delete_operation']);
       for (const tool of result.tools) {
         expect(tool.name).toBeDefined();
         expect(tool.description).toBeDefined();

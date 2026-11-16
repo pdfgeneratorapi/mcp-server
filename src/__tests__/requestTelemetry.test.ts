@@ -240,15 +240,15 @@ describe('request telemetry', () => {
     expect(output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n')).not.toContain(argument);
   });
 
-  it('names the operation a call_operation run ran', async () => {
+  it('names the operation a run ran', async () => {
     mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{}') });
     const token = 'user-7.client-1.templates~delete';
     const { url, sessionId } = await connect(token);
 
-    await callTool(url, token, sessionId, 'call_operation', { id: 'delete_template', arguments: { templateId: 1 } });
+    await callTool(url, token, sessionId, 'delete_operation', { id: 'delete_template', arguments: { templateId: 1 } });
 
     expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
-      tool: 'call_operation',
+      tool: 'delete_operation',
       operation: 'delete_template',
       outcome: 'ok',
       upstream_status: 200,
@@ -260,10 +260,10 @@ describe('request telemetry', () => {
     const token = 'user-7.client-1.templates~read';
     const { url, sessionId } = await connect(token);
 
-    await callTool(url, token, sessionId, 'call_operation', { id: 'delete_template', arguments: { templateId: 1 } });
+    await callTool(url, token, sessionId, 'delete_operation', { id: 'delete_template', arguments: { templateId: 1 } });
 
     expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
-      tool: 'call_operation',
+      tool: 'delete_operation',
       operation: 'delete_template',
       status: 403,
       outcome: 'refused',

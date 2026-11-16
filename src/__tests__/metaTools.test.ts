@@ -8,6 +8,7 @@ jest.unstable_mockModule('axios', () => ({
 
 const {
   CALL_OPERATION,
+  DELETE_OPERATION,
   DESCRIBE_OPERATION,
   READ_OPERATION,
   SEARCH_OPERATIONS,
@@ -47,22 +48,26 @@ async function connectedClient() {
 }
 
 describe('the meta-tools', () => {
-  it('are the four tools that search, describe and run operations', () => {
-    expect([...metaTools.keys()]).toEqual([SEARCH_OPERATIONS, DESCRIBE_OPERATION, READ_OPERATION, CALL_OPERATION]);
+  it('are the five tools that search, describe and run operations', () => {
+    expect([...metaTools.keys()]).toEqual([SEARCH_OPERATIONS, DESCRIBE_OPERATION, READ_OPERATION, CALL_OPERATION, DELETE_OPERATION]);
   });
 
-  /** Clients skip the confirmation for read-only tools, so only a run that changes nothing may claim it. */
-  it('hint that only call_operation changes or destroys anything', () => {
+  /**
+   * Clients skip the confirmation for read-only tools and ask before destructive ones, so a user
+   * who always allows call_operation is still asked before anything is deleted.
+   */
+  it('hint that call_operation changes, and only delete_operation destroys', () => {
     expect(metaTools.get(SEARCH_OPERATIONS)!.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
     expect(metaTools.get(DESCRIBE_OPERATION)!.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
     expect(metaTools.get(READ_OPERATION)!.annotations).toMatchObject({ readOnlyHint: true, destructiveHint: false });
-    expect(metaTools.get(CALL_OPERATION)!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(metaTools.get(CALL_OPERATION)!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+    expect(metaTools.get(DELETE_OPERATION)!.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
   });
 
   it('name the tool that runs each operation', () => {
     expect(runToolOf(operation('get_templates'))).toBe('read_operation');
     expect(runToolOf(operation('preview_template'))).toBe('read_operation');
-    expect(runToolOf(operation('delete_template'))).toBe('call_operation');
+    expect(runToolOf(operation('delete_template'))).toBe('delete_operation');
     expect(runToolOf(operation('convert_html_to_pdf'))).toBe('call_operation');
     expect(runToolOf(operation('run_builder_tool'))).toBe('call_operation, or read_operation for a call that only reads');
   });
@@ -169,7 +174,7 @@ describe('describe_operation', () => {
       id: 'delete_template',
       title: 'Delete Template',
       category: 'templates',
-      runWith: 'call_operation',
+      runWith: 'delete_operation',
       description: definition.description,
       inputSchema: definition.inputSchema,
       example: { templateId: 1 },
@@ -235,7 +240,7 @@ describe('resolveRun', () => {
   it('runs an operation with its arguments', () => {
     expect(resolveRun(READ_OPERATION, { id: 'get_template', arguments: { templateId: 7 } }))
       .toEqual({ operation: operation('get_template'), args: { templateId: 7 } });
-    expect(resolveRun(CALL_OPERATION, { id: 'delete_template', arguments: { templateId: 7 } }))
+    expect(resolveRun(DELETE_OPERATION, { id: 'delete_template', arguments: { templateId: 7 } }))
       .toEqual({ operation: operation('delete_template'), args: { templateId: 7 } });
   });
 
@@ -245,7 +250,8 @@ describe('resolveRun', () => {
   });
 
   it.each([
-    [READ_OPERATION, { id: 'delete_template' }, 'wrong_run_tool', '"delete_template" deletes data, so run it with call_operation.'],
+    [READ_OPERATION, { id: 'delete_template' }, 'wrong_run_tool', '"delete_template" deletes data, so run it with delete_operation.'],
+    [CALL_OPERATION, { id: 'delete_template' }, 'wrong_run_tool', '"delete_template" deletes data, so run it with delete_operation.'],
     [READ_OPERATION, { id: 'update_template' }, 'wrong_run_tool', '"update_template" changes data, so run it with call_operation.'],
     [READ_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'add_component' } }, 'wrong_run_tool', '"run_builder_tool" changes data, so run it with call_operation.'],
     [CALL_OPERATION, { id: 'make_coffee' }, 'unknown_operation', 'There is no operation "make_coffee". Find one with search_operations.'],
@@ -261,6 +267,11 @@ describe('resolveRun', () => {
       .toMatchObject({ operation: operation('run_builder_tool') });
     expect(resolveRun(CALL_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'add_component' } }))
       .toMatchObject({ operation: operation('run_builder_tool') });
+  });
+
+  it('runs anything through delete_operation, which clients ask about the most', () => {
+    expect(resolveRun(DELETE_OPERATION, { id: 'get_templates' })).toMatchObject({ operation: operation('get_templates') });
+    expect(resolveRun(DELETE_OPERATION, { id: 'update_template', arguments: { templateId: 7 } })).toMatchObject({ operation: operation('update_template') });
   });
 
   /** Running a read through a tool clients ask about protects nothing, so it is not refused. */
@@ -282,6 +293,7 @@ describe('scopedCallOf', () => {
     [DESCRIBE_OPERATION, { ids: ['delete_template'] }],
     ['delete_template', { templateId: 7 }],
     [READ_OPERATION, { id: 'delete_template' }],
+    [CALL_OPERATION, { id: 'delete_template' }],
     [CALL_OPERATION, { id: 'make_coffee' }],
   ])('checks nothing for %s %j, which runs no operation', (tool, args) => {
     expect(scopedCallOf(tool, args)).toBeNull();
@@ -385,11 +397,11 @@ describe('exampleArguments', () => {
 });
 
 describe('the server', () => {
-  it('lists the four meta-tools, and no operation as a tool of its own', async () => {
+  it('lists the five meta-tools, and no operation as a tool of its own', async () => {
     const { tools } = await (await connectedClient()).listTools();
 
-    expect(tools.map(tool => tool.name)).toEqual([SEARCH_OPERATIONS, DESCRIBE_OPERATION, READ_OPERATION, CALL_OPERATION]);
-    expect(tools.find(tool => tool.name === CALL_OPERATION)?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(tools.map(tool => tool.name)).toEqual([SEARCH_OPERATIONS, DESCRIBE_OPERATION, READ_OPERATION, CALL_OPERATION, DELETE_OPERATION]);
+    expect(tools.find(tool => tool.name === DELETE_OPERATION)?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
   });
 
   it('searches and describes without calling the API', async () => {
@@ -420,7 +432,16 @@ describe('the server', () => {
     mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{}') });
     const client = await connectedClient();
 
-    await client.callTool({ name: CALL_OPERATION, arguments: { id: 'delete_template', arguments: { templateId: 7 } } });
+    await client.callTool({ name: CALL_OPERATION, arguments: { id: 'copy_template', arguments: { templateId: 7 } } });
+
+    expect(mockAxios).toHaveBeenCalledWith(expect.objectContaining({ method: 'POST', url: `${API_BASE_URL}/templates/7/copy` }));
+  });
+
+  it('runs an operation through delete_operation', async () => {
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{}') });
+    const client = await connectedClient();
+
+    await client.callTool({ name: DELETE_OPERATION, arguments: { id: 'delete_template', arguments: { templateId: 7 } } });
 
     expect(mockAxios).toHaveBeenCalledWith(expect.objectContaining({ method: 'DELETE', url: `${API_BASE_URL}/templates/7` }));
   });
@@ -443,7 +464,7 @@ describe('the server', () => {
 
     expect(read.isError).toBe(true);
     expect(textOf(read as any)).toBe('Error: There is no tool "get_templates": it is an operation. Run it with read_operation, with the arguments describe_operation shows for it.');
-    expect(textOf(call as any)).toBe('Error: There is no tool "delete_template": it is an operation. Run it with call_operation, with the arguments describe_operation shows for it.');
+    expect(textOf(call as any)).toBe('Error: There is no tool "delete_template": it is an operation. Run it with delete_operation, with the arguments describe_operation shows for it.');
     expect(mockAxios).not.toHaveBeenCalled();
   });
 
@@ -460,7 +481,7 @@ describe('the server', () => {
     const result = await client.callTool({ name: READ_OPERATION, arguments: { id: 'delete_template', arguments: { templateId: 7 } } });
 
     expect(result.isError).toBe(true);
-    expect(textOf(result as any)).toBe('Error: "delete_template" deletes data, so run it with call_operation.');
+    expect(textOf(result as any)).toBe('Error: "delete_template" deletes data, so run it with delete_operation.');
     expect(mockAxios).not.toHaveBeenCalled();
   });
 });

@@ -25,6 +25,7 @@ export const SEARCH_OPERATIONS = 'search_operations';
 export const DESCRIBE_OPERATION = 'describe_operation';
 export const READ_OPERATION = 'read_operation';
 export const CALL_OPERATION = 'call_operation';
+export const DELETE_OPERATION = 'delete_operation';
 
 export const MAX_DESCRIBED_OPERATIONS = 5;
 
@@ -96,15 +97,21 @@ export const metaTools: Map<string, MetaTool> = new Map([
   }],
   [READ_OPERATION, {
     name: READ_OPERATION,
-    description: `Runs an operation that only reads: one that lists or gets something, a schema, a preview, the service status, or a template builder tool that only reads. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them. An operation that creates, changes or deletes something runs with ${CALL_OPERATION}.`,
+    description: `Runs an operation that only reads: one that lists or gets something, a schema, a preview, the service status, or a template builder tool that only reads. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them. An operation that creates or changes something runs with ${CALL_OPERATION}, and one that deletes something with ${DELETE_OPERATION}.`,
     inputSchema: runInputSchema,
     annotations: { title: 'Run a Read-Only Operation', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }],
   [CALL_OPERATION, {
     name: CALL_OPERATION,
-    description: `Runs an operation that creates, changes or deletes something, or that generates or converts a document: create or update a template, generate a document, convert HTML to PDF, delete a workspace, or run a template builder tool that changes the template. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them. Ask for a document as a link (output url or viewer) only when the user wants one: a link stores the document for 30 days. An operation that only reads runs with ${READ_OPERATION}.`,
+    description: `Runs an operation that creates or changes something, or that generates or converts a document: create or update a template, generate a document, convert HTML to PDF, or run a template builder tool that changes the template. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them. Ask for a document as a link (output url or viewer) only when the user wants one: a link stores the document for 30 days. An operation that only reads is better run with ${READ_OPERATION}, and one that deletes something runs with ${DELETE_OPERATION}.`,
     inputSchema: runInputSchema,
-    annotations: { title: 'Run an Operation', readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    annotations: { title: 'Run an Operation', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  }],
+  [DELETE_OPERATION, {
+    name: DELETE_OPERATION,
+    description: `Runs an operation that deletes something: a template, a template version, a document, a workspace or a form. What it deletes cannot be restored, so make sure the user wants it gone. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them.`,
+    inputSchema: runInputSchema,
+    annotations: { title: 'Run a Delete Operation', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
   }],
 ]);
 
@@ -138,14 +145,15 @@ export function unknownToolMessage(toolName: string): string {
 /** The most each run tool runs: any operation at that level or below. */
 const RUN_TOOL_LEVELS: Record<string, OperationLevel> = {
   [READ_OPERATION]: 'read',
-  [CALL_OPERATION]: 'delete',
+  [CALL_OPERATION]: 'write',
+  [DELETE_OPERATION]: 'delete',
 };
 
 /** The run tool an operation of each level is meant for: the least one that runs it. */
 const RUN_TOOL_FOR: Record<OperationLevel, string> = {
   read: READ_OPERATION,
   write: CALL_OPERATION,
-  delete: CALL_OPERATION,
+  delete: DELETE_OPERATION,
 };
 
 const LEVEL_DOES: Record<OperationLevel, string> = {

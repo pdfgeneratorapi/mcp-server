@@ -111,7 +111,7 @@ describe('scope enforcement over HTTP', () => {
     const token = 'user-a.client-1.templates~read';
     const { url, sessionId } = await connect(token);
 
-    const response = await callTool(url, token, sessionId, 'call_operation', { id: 'delete_template', arguments: { templateId: 7 } });
+    const response = await callTool(url, token, sessionId, 'delete_operation', { id: 'delete_template', arguments: { templateId: 7 } });
     await response.text();
 
     expect(response.status).toBe(403);
@@ -162,7 +162,7 @@ describe('scope enforcement over HTTP', () => {
     const body = await response.text();
 
     expect(response.status).toBe(200);
-    expect(body).toContain('\\"delete_template\\" deletes data, so run it with call_operation.');
+    expect(body).toContain('\\"delete_template\\" deletes data, so run it with delete_operation.');
     expect(mockAxios).not.toHaveBeenCalled();
   });
 
@@ -188,7 +188,7 @@ describe('scope enforcement over HTTP', () => {
     const token = 'user-a.client-1.templates~read';
     const { url, sessionId } = await connect(token);
 
-    const response = await callTool(url, token, sessionId, 'call_operation', { id: 'delete_template', arguments: { templateId: 7 } });
+    const response = await callTool(url, token, sessionId, 'delete_operation', { id: 'delete_template', arguments: { templateId: 7 } });
     await response.text();
 
     expect(response.status).toBe(200);
@@ -207,8 +207,8 @@ describe('scope enforcement over HTTP', () => {
     expect(body).not.toContain('delete_template');
   });
 
-  /** A write the grant does not cover reaches the step-up challenge only through call_operation. */
-  it('offers a template-read client all four tools', async () => {
+  /** A write or delete the grant does not cover reaches the step-up challenge only through its run tool. */
+  it('offers a template-read client all five tools', async () => {
     process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
     const token = 'user-a.client-1.templates~read';
     const { url, sessionId } = await connect(token);
@@ -220,10 +220,10 @@ describe('scope enforcement over HTTP', () => {
     });
     const body = await listed.text();
 
-    expect(listedNames(body)).toEqual(['search_operations', 'describe_operation', 'read_operation', 'call_operation']);
+    expect(listedNames(body)).toEqual(['search_operations', 'describe_operation', 'read_operation', 'call_operation', 'delete_operation']);
   });
 
-  it('offers all four tools to a token that carries no scopes', async () => {
+  it('offers all five tools to a token that carries no scopes', async () => {
     process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
     const token = 'user-a.client-1.';
     const { url, sessionId } = await connect(token);
@@ -235,6 +235,6 @@ describe('scope enforcement over HTTP', () => {
     });
     const body = await listed.text();
 
-    expect(listedNames(body)).toEqual(['search_operations', 'describe_operation', 'read_operation', 'call_operation']);
+    expect(listedNames(body)).toEqual(['search_operations', 'describe_operation', 'read_operation', 'call_operation', 'delete_operation']);
   });
 });

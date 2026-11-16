@@ -88,11 +88,11 @@ You get an email the first time an application connects to a workspace. To see o
 
 ## What it can do
 
-The server lists four tools and reaches every operation through them, so a client loads a few kilobytes of tool definitions instead of one tool per operation:
+The server lists five tools and reaches every operation through them, so a client loads a few kilobytes of tool definitions instead of one tool per operation:
 
 - `search_operations` finds the operations for a task, and shows each one's ID, the tool that runs it and how many tokens its schema costs.
 - `describe_operation` returns what the operations a client is about to run take, with example arguments.
-- `read_operation` runs an operation that only reads, and `call_operation` one that creates, changes or deletes something, so a client can ask before it changes anything.
+- `read_operation` runs an operation that only reads, `call_operation` one that creates or changes something, and `delete_operation` one that deletes something, so a client can ask before it changes anything, and again before it deletes.
 
 The operations:
 
@@ -111,7 +111,7 @@ The server speaks MCP protocol revision 2026-07-28, which needs no session, and 
 
 ## Upgrading from 5.x
 
-Version 6 lists four tools instead of one per operation. A client that called an operation as a tool, such as `get_templates`, now runs it with `read_operation`, or with `call_operation` if it creates, changes or deletes something, after `describe_operation` shows its arguments. The operations take the same arguments and return the same results. The per-request log line names the operation a run ran in `operation`.
+Version 6 lists five tools instead of one per operation. A client that called an operation as a tool, such as `get_templates`, now runs it with `read_operation`, with `call_operation` if it creates or changes something, or with `delete_operation` if it deletes something, after `describe_operation` shows its arguments. The operations take the same arguments and return the same results. The per-request log line names the operation a run ran in `operation`.
 
 ## Upgrading from 4.x
 
