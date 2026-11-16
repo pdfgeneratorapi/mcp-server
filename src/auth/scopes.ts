@@ -3,7 +3,6 @@
  * cannot delete a workspace.
  */
 import { catalogue } from '../catalogue.js';
-import { RUN_BUILDER_TOOL, builderToolChangesTemplate } from '../builder.js';
 
 export type ScopeEnforcement = 'off' | 'warn' | 'enforce';
 
@@ -120,15 +119,21 @@ export function requiredScope(toolName: string): string | null {
 }
 
 /**
- * The scope one call needs: a tool's own scope, except that running a builder tool which
- * changes the template needs templates:write.
+ * The scope one call needs: an operation's own scope, except that a call which changes something,
+ * of an operation whose arguments decide whether it does, needs the write scope of its family.
+ * Running a builder tool that changes the template needs templates:write.
  */
 export function requiredScopeForCall(toolName: string, args: Record<string, unknown> = {}): string | null {
-  if (toolName === RUN_BUILDER_TOOL && builderToolChangesTemplate(args.tool)) {
-    return 'templates:write';
+  const scope = requiredScope(toolName);
+  const readOnlyCall = catalogue.get(toolName)?.readOnlyCall;
+
+  if (scope === null || !readOnlyCall || readOnlyCall(args)) {
+    return scope;
   }
 
-  return requiredScope(toolName);
+  const [family, action] = scope.split(':');
+
+  return action === 'read' ? `${family}:write` : scope;
 }
 
 /**
