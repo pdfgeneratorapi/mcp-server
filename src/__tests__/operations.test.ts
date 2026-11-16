@@ -2,8 +2,6 @@ import { describe, it, expect } from '@jest/globals';
 import {
   CATEGORIES,
   estimateTokens,
-  rankOperations,
-  searchLimit,
   callLevel,
   operations,
   searchOperations,
@@ -22,6 +20,7 @@ const operation = (id: string): Operation => {
 };
 
 const ids = (found: Operation[]) => found.map(item => item.id);
+const search = (...args: Parameters<typeof searchOperations>) => searchOperations(...args).found;
 
 describe('the operation index', () => {
   it('has one operation for each catalogue entry, each with a category and a title', () => {
@@ -127,7 +126,7 @@ describe('searchOperations', () => {
     ['measure text', 'measure_text'],
     ['edit template in editor', 'open_editor'],
   ])('ranks "%s" first at %s', (query, expected) => {
-    expect(searchOperations(query)[0]?.id).toBe(expected);
+    expect(search(query)[0]?.id).toBe(expected);
   });
 
   it.each([
@@ -139,7 +138,7 @@ describe('searchOperations', () => {
     ['remove template', 'delete_template'],
     ['website to pdf', 'convert_url_to_pdf'],
   ])('finds "%s" by a word only its keywords carry: %s', (query, expected) => {
-    expect(searchOperations(query)[0]?.id).toBe(expected);
+    expect(search(query)[0]?.id).toBe(expected);
   });
 
   it.each([
@@ -147,60 +146,57 @@ describe('searchOperations', () => {
     ['modify template'],
     ['rename template'],
   ])('finds the ways to change a template for "%s"', (query) => {
-    expect(ids(searchOperations(query))).toEqual(expect.arrayContaining(['update_template', 'run_builder_tool']));
+    expect(ids(search(query))).toEqual(expect.arrayContaining(['update_template', 'run_builder_tool']));
   });
 
   it('ranks an operation matching every term above those matching some', () => {
-    expect(ids(searchOperations('delete template')).slice(0, 2)).toEqual(['delete_template', 'delete_template_version']);
+    expect(ids(search('delete template')).slice(0, 2)).toEqual(['delete_template', 'delete_template_version']);
   });
 
   it('matches a plural and a prefix', () => {
-    expect(ids(searchOperations('watermarks'))).toEqual(['add_watermark']);
-    expect(ids(searchOperations('waterm'))).toEqual(['add_watermark']);
+    expect(ids(search('watermarks'))).toEqual(['add_watermark']);
+    expect(ids(search('waterm'))).toEqual(['add_watermark']);
   });
 
   it('ignores case and punctuation', () => {
-    expect(ids(searchOperations('XRechnung!'))).toEqual(['create_xrechnung_einvoice']);
+    expect(ids(search('XRechnung!'))).toEqual(['create_xrechnung_einvoice']);
   });
 
   it('leaves out results far below the best one', () => {
-    expect(ids(searchOperations('watermark'))).toEqual(['add_watermark']);
+    expect(ids(search('watermark'))).toEqual(['add_watermark']);
   });
 
   it('finds nothing for words no operation carries', () => {
-    expect(searchOperations('spaceship')).toEqual([]);
+    expect(search('spaceship')).toEqual([]);
   });
 
   it('searches one category only when given one', () => {
-    expect(ids(searchOperations('delete', { category: 'forms' }))).toEqual(['delete_form']);
+    expect(ids(search('delete', { category: 'forms' }))).toEqual(['delete_form']);
   });
 
   it('searches only the operations given', () => {
-    expect(ids(searchOperations('template', { operations: [operation('get_templates'), operation('get_status')] })))
+    expect(ids(search('template', { operations: [operation('get_templates'), operation('get_status')] })))
       .toEqual(['get_templates']);
   });
 
   it('lists operations in catalogue order for a query of stop words only', () => {
-    expect(ids(searchOperations('the', { category: 'workspaces' })))
+    expect(ids(search('the', { category: 'workspaces' })))
       .toEqual(['get_workspaces', 'create_workspace', 'get_workspace', 'delete_workspace']);
-    expect(ids(searchOperations('', { category: 'workspaces' })))
+    expect(ids(search('', { category: 'workspaces' })))
       .toEqual(['get_workspaces', 'create_workspace', 'get_workspace', 'delete_workspace']);
   });
 
-  it('ranks every match, for a search to say how many it left out', () => {
-    expect(rankOperations('', { category: 'templates' })).toHaveLength(23);
-    expect(ids(rankOperations('watermark'))).toEqual(['add_watermark']);
-  });
-
-  it('keeps the limit between 1 and 25, 10 when none is given', () => {
-    expect([searchLimit(), searchLimit(3), searchLimit(100), searchLimit(0), searchLimit(2.7)]).toEqual([10, 3, 25, 1, 2]);
+  it('says how many operations matched in all, beyond the limit', () => {
+    expect(searchOperations('', { category: 'templates' })).toEqual({ found: expect.any(Array), total: 23 });
+    expect(searchOperations('', { category: 'templates' }).found).toHaveLength(10);
+    expect(searchOperations('watermark')).toEqual({ found: [operation('add_watermark')], total: 1 });
   });
 
   it('returns 10 results by default, and between 1 and 25 when asked', () => {
-    expect(searchOperations('')).toHaveLength(10);
-    expect(searchOperations('', { limit: 3 })).toHaveLength(3);
-    expect(searchOperations('', { limit: 100 })).toHaveLength(25);
-    expect(searchOperations('', { limit: 0 })).toHaveLength(1);
-    expect(searchOperations('', { limit: 2.7 })).toHaveLength(2);
+    expect(search('')).toHaveLength(10);
+    expect(search('', { limit: 3 })).toHaveLength(3);
+    expect(search('', { limit: 100 })).toHaveLength(25);
+    expect(search('', { limit: 0 })).toHaveLength(1);
+    expect(search('', { limit: 2.7 })).toHaveLength(2);
   });
 });

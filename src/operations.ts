@@ -107,6 +107,13 @@ export interface SearchOptions extends RankOptions {
   limit?: number;
 }
 
+export interface SearchResult {
+  /** The best matches, as many as the limit allows. */
+  found: Operation[];
+  /** How many operations matched in all. */
+  total: number;
+}
+
 function words(text: string): string[] {
   return text.toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 0);
 }
@@ -201,13 +208,18 @@ function termMatch(term: string, entry: IndexedOperation): number {
 }
 
 /** How many results a search returns: the limit asked for, within 1 and MAX_SEARCH_LIMIT. */
-export function searchLimit(limit?: number): number {
+function searchLimit(limit?: number): number {
   return Math.min(Math.max(Math.trunc(limit ?? DEFAULT_SEARCH_LIMIT), 1), MAX_SEARCH_LIMIT);
 }
 
-/** The best matches for a query, as many as the limit allows; see rankOperations. */
-export function searchOperations(query: string, options: SearchOptions = {}): Operation[] {
-  return rankOperations(query, options).slice(0, searchLimit(options.limit));
+/**
+ * The best matches for a query, as many as the limit allows (10 when none is given, between 1
+ * and MAX_SEARCH_LIMIT), and how many matched in all.
+ */
+export function searchOperations(query: string, options: SearchOptions = {}): SearchResult {
+  const ranked = rankOperations(query, options);
+
+  return { found: ranked.slice(0, searchLimit(options.limit)), total: ranked.length };
 }
 
 /**
@@ -216,7 +228,7 @@ export function searchOperations(query: string, options: SearchOptions = {}): Op
  * an operation that matches every term ranks above one that matches some. A query of stop words
  * only lists the operations in catalogue order.
  */
-export function rankOperations(query: string, options: RankOptions = {}): Operation[] {
+function rankOperations(query: string, options: RankOptions = {}): Operation[] {
   const candidates = (options.operations ?? [...operations.values()])
     .filter(operation => options.category === undefined || operation.category === options.category);
   const terms = [...new Set(words(query).filter(term => !STOP_WORDS.has(term)))];
