@@ -54,10 +54,10 @@ const SERVER_INSTRUCTIONS = [
 const prompts = [
     {
         name: "generate-pdf",
-        description: "Generate a PDF document by selecting a template and providing data to fill it with",
+        description: "Fill a template with data, preview it, and generate the PDF document when it is wanted",
         arguments: [
             { name: "templateId", description: "The ID of the template to use for PDF generation", required: true },
-            { name: "outputFormat", description: "Output format: base64 or file. Use url or viewer only for a link, which stores the document for 30 days. Default: base64.", required: false },
+            { name: "outputFormat", description: "Output of the document: base64 or file; url or viewer only for a link, which stores the document for 30 days. Given, the document is generated after the preview; left out, only when asked for.", required: false },
         ]
     },
     {
@@ -194,11 +194,13 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
 
         if (name === "generate-pdf") {
             const templateId = args?.templateId || "<TEMPLATE_ID>";
-            const output = args?.outputFormat ? `, and output "${args.outputFormat}"` : "";
+            const generate = args?.outputFormat
+                ? `Then run generate_document with ${CALL_OPERATION}, with the template ID, the same data and output "${args.outputFormat}".`
+                : `Run generate_document with ${CALL_OPERATION} only when I want the document itself, with the output I ask for.`;
             return {
                 messages: [{
                     role: "user" as const,
-                    content: { type: "text" as const, text: `Generate a PDF document using template ID ${templateId}. First run get_template_data with ${READ_OPERATION} and templateId ${templateId} to see the data fields the template uses. Then run generate_document with ${CALL_OPERATION}, with the template ID, data for those fields${output}. ${DESCRIBE_OPERATION} shows the arguments of both.` }
+                    content: { type: "text" as const, text: `Generate a PDF document using template ID ${templateId}. First run get_template_data with ${READ_OPERATION} and templateId ${templateId} to see the data fields the template uses. Then show the template filled with data for those fields: run preview_template with ${READ_OPERATION}, which shows up to 3 pages as images, free and stored nowhere. ${generate} ${DESCRIBE_OPERATION} shows the arguments of each.` }
                 }]
             };
         }

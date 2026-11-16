@@ -92,14 +92,17 @@ describe('the prompts', () => {
     expect(await promptText(name, args)).toContain(`run ${operation} with call_operation`);
   });
 
-  it('asks for no output when the user names none, so the document is not stored', async () => {
+  /** A whole document in the chat can be far larger than a client takes; a preview is a few images. */
+  it('previews the filled template, and generates the document only when the user asks for it', async () => {
     const text = await promptText('generate-pdf', { templateId: '42' });
 
-    expect(text).toBe('Generate a PDF document using template ID 42. First run get_template_data with read_operation and templateId 42 to see the data fields the template uses. Then run generate_document with call_operation, with the template ID, data for those fields. describe_operation shows the arguments of both.');
+    expect(text).toBe('Generate a PDF document using template ID 42. First run get_template_data with read_operation and templateId 42 to see the data fields the template uses. Then show the template filled with data for those fields: run preview_template with read_operation, which shows up to 3 pages as images, free and stored nowhere. Run generate_document with call_operation only when I want the document itself, with the output I ask for. describe_operation shows the arguments of each.');
   });
 
-  it('asks for the output the user names', async () => {
-    expect(await promptText('generate-pdf', { templateId: '42', outputFormat: 'url' }))
-      .toContain('with the template ID, data for those fields, and output "url".');
+  it('generates the document after the preview, with the output the user names', async () => {
+    const text = await promptText('generate-pdf', { templateId: '42', outputFormat: 'url' });
+
+    expect(text).toContain('run preview_template with read_operation');
+    expect(text).toContain('Then run generate_document with call_operation, with the template ID, the same data and output "url".');
   });
 });
