@@ -16,7 +16,7 @@ import {
   type Operation,
   type OperationCategory,
 } from './operations.js';
-import { mayCallTool, requiredScope, type ScopeEnforcement } from './auth/scopes.js';
+import { mayCallTool, requiredScope, visibleTools, type ScopeEnforcement } from './auth/scopes.js';
 import { RUN_BUILDER_TOOL } from './builder.js';
 
 export const SEARCH_OPERATIONS = 'search_operations';
@@ -145,7 +145,13 @@ export function runToolOf(operation: Operation): string {
 export function grantedOperations(scopes: string[], enforcement: ScopeEnforcement): Operation[] {
   const all = [...operations.values()];
 
-  return enforcement === 'off' ? all : all.filter(operation => mayCallTool(operation.id, scopes).allowed);
+  if (enforcement === 'off') {
+    return all;
+  }
+
+  const visible = new Set(visibleTools(scopes));
+
+  return all.filter(operation => visible.has(operation.id));
 }
 
 /**

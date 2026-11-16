@@ -168,7 +168,7 @@ export function mayCallTool(
 }
 
 /**
- * The tools a grant may call, so clients never see one they cannot use.
+ * The operations a grant may run, so a search never offers one it cannot use.
  */
 export function visibleTools(scopes: string[]): string[] {
   return [...catalogue.keys()].filter(toolName => mayCallTool(toolName, scopes).allowed);
