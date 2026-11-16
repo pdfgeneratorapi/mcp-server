@@ -18,6 +18,7 @@ const {
   resolveRun,
   runToolOf,
   searchOperationsResult,
+  visibleMetaTools,
 } = await import('../metaTools.js');
 const { operations } = await import('../operations.js');
 const { executeApiTool } = await import('../execute.js');
@@ -87,6 +88,33 @@ describe('grantedOperations', () => {
   it('counts the narrower scopes a broader one implies', () => {
     expect(grantedOperations(['templates:delete'], 'enforce').map(item => item.id))
       .toEqual(expect.arrayContaining(['delete_template', 'update_template', 'get_template']));
+  });
+});
+
+describe('visibleMetaTools', () => {
+  const names = (scopes: string[], enforcement: 'off' | 'warn' | 'enforce' = 'enforce') =>
+    visibleMetaTools(scopes, enforcement).map(tool => tool.name);
+
+  it('offers all four when scopes are not enforced, or the token carries none', () => {
+    expect(names(['templates:read'], 'off')).toEqual([SEARCH_OPERATIONS, DESCRIBE_OPERATION, READ_OPERATION, CALL_OPERATION]);
+    expect(names([])).toEqual([SEARCH_OPERATIONS, DESCRIBE_OPERATION, READ_OPERATION, CALL_OPERATION]);
+  });
+
+  it.each([
+    [['templates:read']],
+    [['documents:read', 'forms:read', 'workspaces:read']],
+  ])('leaves call_operation out for %j, which can change nothing', (scopes) => {
+    expect(names(scopes)).toEqual([SEARCH_OPERATIONS, DESCRIBE_OPERATION, READ_OPERATION]);
+    expect(names(scopes, 'warn')).toEqual([SEARCH_OPERATIONS, DESCRIBE_OPERATION, READ_OPERATION]);
+  });
+
+  it.each([
+    [['templates:write']],
+    [['documents:write']],
+    [['pdf:write']],
+    [['forms:share']],
+  ])('offers call_operation to %j', (scopes) => {
+    expect(names(scopes)).toContain(CALL_OPERATION);
   });
 });
 

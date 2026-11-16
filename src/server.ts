@@ -18,9 +18,9 @@ import {
     SEARCH_OPERATIONS,
     describeOperationsResult,
     grantedOperations,
-    metaTools,
     resolveRun,
     searchOperationsResult,
+    visibleMetaTools,
 } from './metaTools.js';
 import { executeApiTool } from './execute.js';
 import { isEndedGrant, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
@@ -97,7 +97,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
             inputSchema: simplifySchemaForOpenAI(def.inputSchema),
             annotations: toolAnnotations[def.name],
         }));
-        const searchTools: Tool[] = Array.from(metaTools.values()).map(tool => ({
+        const searchTools: Tool[] = visibleMetaTools(scopes, enforcement).map(tool => ({
             name: tool.name,
             description: tool.description,
             inputSchema: simplifySchemaForOpenAI(tool.inputSchema),

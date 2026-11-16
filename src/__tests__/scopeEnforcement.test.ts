@@ -276,6 +276,8 @@ describe('scope enforcement over HTTP', () => {
     expect(body).toContain('get_status');
     expect(body).not.toContain('delete_template');
     expect(body).not.toContain('generate_document');
+    expect(body).toContain('"name":"read_operation"');
+    expect(body).not.toContain('"name":"call_operation"');
   });
 
   it('offers every tool to a token that carries no scopes', async () => {
