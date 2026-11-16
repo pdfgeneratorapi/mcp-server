@@ -15,6 +15,7 @@ const {
   exampleArguments,
   grantedOperations,
   metaTools,
+  notGrantedMessage,
   resolveRun,
   runToolOf,
   scopedCallOf,
@@ -114,6 +115,15 @@ describe('search_operations', () => {
     expect(lines.slice(1).map(line => line.split(' | ')[0])).toEqual(['get_workspaces', 'create_workspace']);
   });
 
+  /** Some clients send null for every optional argument they leave out. */
+  it('takes null for an argument left out', () => {
+    const result = searchOperationsResult({ query: 'watermark', category: null, limit: null }, all);
+
+    expect(result.isError).toBeUndefined();
+    expect(textOf(result)).toContain('add_watermark | Add Watermark to PDF');
+    expect(textOf(searchOperationsResult({ query: null, category: 'workspaces' }, all))).toContain('get_workspaces');
+  });
+
   it('says when nothing matches, without an error', () => {
     const result = searchOperationsResult({ query: 'spaceship' }, all);
 
@@ -171,6 +181,11 @@ describe('describe_operation', () => {
     ]);
   });
 
+  it('words a missing permission as a run refused for it does', () => {
+    expect(notGrantedMessage('delete_template', 'templates:delete'))
+      .toBe('This connection is not allowed to run "delete_template". It needs the "templates:delete" permission; reconnect and grant it.');
+  });
+
   it('is an error when it could describe none of them', () => {
     expect(describeOperationsResult({ ids: ['make_coffee'] }, all).isError).toBe(true);
   });
@@ -209,8 +224,9 @@ describe('resolveRun', () => {
       .toEqual({ operation: operation('delete_template'), args: { templateId: 7 } });
   });
 
-  it('runs an operation without arguments on none', () => {
+  it('runs an operation without arguments on none, or on null', () => {
     expect(resolveRun(READ_OPERATION, { id: 'get_status' })).toEqual({ operation: operation('get_status'), args: {} });
+    expect(resolveRun(READ_OPERATION, { id: 'get_status', arguments: null })).toEqual({ operation: operation('get_status'), args: {} });
   });
 
   it.each([
@@ -222,7 +238,6 @@ describe('resolveRun', () => {
     [CALL_OPERATION, {}, 'invalid_arguments', 'Give the ID of an operation, from search_operations.'],
     [CALL_OPERATION, { id: '' }, 'invalid_arguments', 'Give the ID of an operation, from search_operations.'],
     [READ_OPERATION, { id: 'get_template', arguments: [7] }, 'invalid_arguments', 'arguments must be an object, as describe_operation shows for "get_template".'],
-    [READ_OPERATION, { id: 'get_template', arguments: null }, 'invalid_arguments', 'arguments must be an object, as describe_operation shows for "get_template".'],
   ])('%s refuses %j', (tool, args, refusal, message) => {
     expect(resolveRun(tool, args)).toEqual({ refusal, message });
   });
@@ -322,6 +337,16 @@ describe('exampleArguments', () => {
   it('takes a nullable type as the type it is otherwise', () => {
     expect(exampleArguments({ type: 'object', properties: { note: { type: ['null', 'string'] } }, required: ['note'] }))
       .toEqual({ note: '<note>' });
+  });
+
+  it('keeps a null the schema gives as its example or default', () => {
+    expect(exampleArguments({ type: 'object', properties: { n: { type: ['integer', 'null'], default: null } }, required: ['n'] }))
+      .toEqual({ n: null });
+  });
+
+  it('takes an allOf of anything but objects as its first part', () => {
+    expect(exampleArguments({ type: 'object', properties: { s: { allOf: [{ type: 'string' }, { minLength: 1 }] } }, required: ['s'] }))
+      .toEqual({ s: '<s>' });
   });
 
   it('gives an empty object for a schema that is not an object', () => {

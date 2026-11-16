@@ -116,8 +116,9 @@ function unknownOperation(id: string): string {
   return `There is no operation "${id}". Find one with ${SEARCH_OPERATIONS}.`;
 }
 
-function notGranted(operation: Operation): string {
-  return `This connection is not allowed to run "${operation.id}". It needs the "${requiredScope(operation.id)}" permission; reconnect and grant it.`;
+/** What a client hears for an operation the connection's grant does not cover. */
+export function notGrantedMessage(operationId: string, scope: string | null): string {
+  return `This connection is not allowed to run "${operationId}". It needs the "${scope}" permission; reconnect and grant it.`;
 }
 
 /**
@@ -155,7 +156,10 @@ export function grantedOperations(scopes: string[], enforcement: ScopeEnforcemen
 }
 
 export function searchOperationsResult(args: JsonObject, granted: Operation[]): CallToolResult {
-  const { query = '', category, limit } = args;
+  // A client may send null for an argument it leaves out
+  const query = args.query ?? '';
+  const category = args.category ?? undefined;
+  const limit = args.limit ?? undefined;
 
   if (typeof query !== 'string') {
     return text('query must be text.', true);
@@ -203,7 +207,7 @@ export function describeOperationsResult(args: JsonObject, granted: Operation[])
     }
 
     if (!grantedIds.has(id)) {
-      return { id, error: notGranted(operation) };
+      return { id, error: notGrantedMessage(id, requiredScope(id)) };
     }
 
     return {
@@ -225,7 +229,8 @@ export function describeOperationsResult(args: JsonObject, granted: Operation[])
  * cannot run: an unknown operation, or one the other tool runs.
  */
 export function resolveRun(toolName: string, args: JsonObject): RunResolution {
-  const { id, arguments: operationArgs = {} } = args;
+  const { id } = args;
+  const operationArgs = args.arguments ?? {};
 
   if (typeof id !== 'string' || id === '') {
     return { refusal: 'invalid_arguments', message: `Give the ID of an operation, from ${SEARCH_OPERATIONS}.` };
@@ -304,7 +309,9 @@ function exampleOf(schema: any, name: string, depth: number): unknown {
   }
 
   if (Array.isArray(schema.allOf)) {
-    return Object.assign({}, ...schema.allOf.map((part: unknown) => exampleOf(part, name, depth + 1)));
+    const parts = schema.allOf.map((part: unknown) => exampleOf(part, name, depth + 1)).filter((part: unknown) => part !== undefined);
+
+    return parts.every(isPlainObject) ? Object.assign({}, ...parts) : parts[0];
   }
 
   const type = Array.isArray(schema.type) ? schema.type.find((option: unknown) => option !== 'null') : schema.type;
@@ -313,10 +320,10 @@ function exampleOf(schema: any, name: string, depth: number): unknown {
     case 'object':
       return Object.fromEntries((schema.required ?? []).map((field: string) => [
         field,
-        exampleOf(schema.properties?.[field], field, depth + 1) ?? `<${field}>`,
+        orPlaceholder(exampleOf(schema.properties?.[field], field, depth + 1), field),
       ]));
     case 'array':
-      return (schema.minItems ?? 0) > 0 ? [exampleOf(schema.items, name, depth + 1) ?? `<${name}>`] : [];
+      return (schema.minItems ?? 0) > 0 ? [orPlaceholder(exampleOf(schema.items, name, depth + 1), name)] : [];
     case 'string':
       return `<${name}>`;
     case 'integer':
@@ -327,6 +334,15 @@ function exampleOf(schema: any, name: string, depth: number): unknown {
     default:
       return undefined;
   }
+}
+
+/** A value the schema gave, null included, or a placeholder where it gave none. */
+function orPlaceholder(value: unknown, name: string): unknown {
+  return value === undefined ? `<${name}>` : value;
+}
+
+function isPlainObject(value: unknown): boolean {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function numberExample(schema: any, type: string): number {

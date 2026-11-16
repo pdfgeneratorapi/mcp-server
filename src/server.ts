@@ -18,6 +18,7 @@ import {
     grantedOperations,
     resolveRun,
     metaTools,
+    notGrantedMessage,
     searchOperationsResult,
     unknownToolMessage,
 } from './metaTools.js';
@@ -152,7 +153,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
             if (enforcement === 'enforce') {
                 observe({ outcome: 'refused', refusal: 'insufficient_scope' });
                 return {
-                    content: [{ type: "text", text: `Error: this connection is not allowed to call "${operationName}". It needs the "${decision.required}" permission; reconnect and grant it.` }],
+                    content: [{ type: "text", text: `Error: ${notGrantedMessage(operationName, decision.required)}` }],
                     isError: true,
                 };
             }
