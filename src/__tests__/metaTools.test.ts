@@ -13,6 +13,7 @@ const {
   READ_OPERATION,
   SEARCH_OPERATIONS,
   describeOperationsResult,
+  describeTokens,
   exampleArguments,
   grantedOperations,
   isRunTool,
@@ -23,7 +24,7 @@ const {
   scopedCallOf,
   searchOperationsResult,
 } = await import('../metaTools.js');
-const { operations } = await import('../operations.js');
+const { estimateTokens, operations } = await import('../operations.js');
 const { executeApiTool } = await import('../execute.js');
 const { createMcpServer } = await import('../server.js');
 const { createStaticCredentials } = await import('../credentials/upstream.js');
@@ -114,13 +115,13 @@ describe('grantedOperations', () => {
 });
 
 describe('search_operations', () => {
-  it('lists each match on a line: id, title, category, the tool that runs it and its schema tokens', () => {
+  it('lists each match on a line: id, title, category, the tool that runs it and the tokens describing it costs', () => {
     const result = searchOperationsResult({ query: 'watermark' }, all);
 
     expect(result.isError).toBeUndefined();
     expect(textOf(result)).toBe([
-      'id | title | category | run with | schema tokens',
-      `add_watermark | Add Watermark to PDF | pdf | call_operation | ${operation('add_watermark').schemaTokens}`,
+      'id | title | category | run with | tokens to describe',
+      `add_watermark | Add Watermark to PDF | pdf | call_operation | ${describeTokens(operation('add_watermark'))}`,
     ].join('\n'));
   });
 
@@ -195,6 +196,16 @@ describe('describe_operation', () => {
       inputSchema: definition.inputSchema,
       example: { templateId: 1 },
     }]);
+  });
+
+  /** A client budgets its describe calls on the figure a search shows. */
+  it('costs an operation what describing it returns, not its schema alone', () => {
+    for (const id of ['get_status', 'generate_document', 'create_template']) {
+      const [entry] = JSON.parse(textOf(describeOperationsResult({ ids: [id] }, all)));
+
+      expect(describeTokens(operation(id))).toBe(estimateTokens(entry));
+      expect(describeTokens(operation(id))).toBeGreaterThan(estimateTokens(operation(id).definition.inputSchema));
+    }
   });
 
   it('describes each operation once, in the order asked', () => {

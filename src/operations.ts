@@ -84,11 +84,6 @@ export interface Operation {
   category: OperationCategory;
   title: string;
   level: OperationLevel;
-  /**
-   * Roughly how many tokens the operation's input schema takes, at four characters a token: the
-   * whole schema, as describe_operation returns it.
-   */
-  schemaTokens: number;
   definition: McpToolDefinition;
 }
 
@@ -118,6 +113,7 @@ function words(text: string): string[] {
   return text.toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 0);
 }
 
+/** Roughly how many tokens a value takes as JSON, at four characters a token. */
 export function estimateTokens(value: unknown): number {
   return Math.ceil(JSON.stringify(value).length / 4);
 }
@@ -145,7 +141,6 @@ function toOperation(definition: McpToolDefinition): Operation {
     category: categoryOf(definition.name),
     title: annotations.title,
     level: annotations.readOnlyHint === true ? 'read' : annotations.destructiveHint === true ? 'delete' : 'write',
-    schemaTokens: estimateTokens(definition.inputSchema),
     definition,
   };
 }

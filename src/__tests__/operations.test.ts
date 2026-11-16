@@ -74,13 +74,6 @@ describe('the operation index', () => {
     expect(estimateTokens({ a: 1 })).toBe(2);
     expect(estimateTokens({ type: 'object', properties: {} })).toBe(9);
   });
-
-  it('costs each operation its whole input schema', () => {
-    const addWatermark = operation('add_watermark');
-
-    expect(addWatermark.schemaTokens).toBe(estimateTokens(addWatermark.definition.inputSchema));
-    expect(operation('get_status').schemaTokens).toBe(9);
-  });
 });
 
 describe('what one call does', () => {

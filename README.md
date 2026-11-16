@@ -90,7 +90,7 @@ You get an email the first time an application connects to a workspace. To see o
 
 The server lists five tools and reaches every operation through them, so a client loads a few kilobytes of tool definitions instead of one tool per operation:
 
-- `search_operations` finds the operations for a task, and shows each one's ID, the tool that runs it and how many tokens its schema costs.
+- `search_operations` finds the operations for a task, and shows each one's ID, the tool that runs it and how many tokens describing it costs.
 - `describe_operation` returns what the operations a client is about to run take, with example arguments.
 - `read_operation` runs an operation that only reads, `call_operation` one that creates or changes something, and `delete_operation` one that deletes something, so a client can ask before it changes anything, and again before it deletes.
 

@@ -9,6 +9,7 @@ import type { ToolAnnotations } from './annotations.js';
 import {
   CATEGORIES,
   DEFAULT_SEARCH_LIMIT,
+  estimateTokens,
   MAX_SEARCH_LIMIT,
   LEVELS,
   callLevel,
@@ -59,7 +60,7 @@ const runInputSchema = {
 export const metaTools: Map<string, MetaTool> = new Map([
   [SEARCH_OPERATIONS, {
     name: SEARCH_OPERATIONS,
-    description: `Finds the PDF Generator API operations for a task: templates and their versions, the template builder and previews, documents, workspaces, forms, PDF tools (convert HTML or a URL to PDF, watermark, encrypt, optimize, fill form fields, QR codes), e-invoices and the service status. Returns each match's ID, title, category, the tool that runs it and how many tokens its schema costs, best match first. Search in a few plain words, such as "add a watermark" or "list templates"; an empty query lists a category. Then describe the operations you will run with ${DESCRIBE_OPERATION}.`,
+    description: `Finds the PDF Generator API operations for a task: templates and their versions, the template builder and previews, documents, workspaces, forms, PDF tools (convert HTML or a URL to PDF, watermark, encrypt, optimize, fill form fields, QR codes), e-invoices and the service status. Returns each match's ID, title, category, the tool that runs it and how many tokens describing it costs, best match first. Search in a few plain words, such as "add a watermark" or "list templates"; an empty query lists a category. Then describe the operations you will run with ${DESCRIBE_OPERATION}.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -78,7 +79,7 @@ export const metaTools: Map<string, MetaTool> = new Map([
   }],
   [DESCRIBE_OPERATION, {
     name: DESCRIBE_OPERATION,
-    description: `Returns what operations take, for IDs that ${SEARCH_OPERATIONS} found: each one's description, its whole input schema, example arguments that fill every required field, and the tool that runs it. Describe only the operations you are about to run, up to ${MAX_DESCRIBED_OPERATIONS} at a time: each schema costs the tokens ${SEARCH_OPERATIONS} shows.`,
+    description: `Returns what operations take, for IDs that ${SEARCH_OPERATIONS} found: each one's description, its whole input schema, example arguments that fill every required field, and the tool that runs it. Describe only the operations you are about to run, up to ${MAX_DESCRIBED_OPERATIONS} at a time: each one costs the tokens ${SEARCH_OPERATIONS} shows.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -213,8 +214,8 @@ export function searchOperationsResult(args: JsonObject, granted: Operation[]): 
   }
 
   return text([
-    'id | title | category | run with | schema tokens',
-    ...found.map(operation => [operation.id, operation.title, operation.category, runToolOf(operation), operation.schemaTokens].join(' | ')),
+    'id | title | category | run with | tokens to describe',
+    ...found.map(operation => [operation.id, operation.title, operation.category, runToolOf(operation), describeTokens(operation)].join(' | ')),
     ...(total > found.length
       ? [`Showing ${found.length} of ${total}: raise limit, up to ${MAX_SEARCH_LIMIT}, or narrow the search to see the rest.`]
       : []),
@@ -246,18 +247,37 @@ export function describeOperationsResult(args: JsonObject, granted: Operation[])
       return { id, error: notGrantedMessage(id, requiredScope(id)) };
     }
 
-    return {
-      id,
-      title: operation.title,
-      category: operation.category,
-      runWith: runToolOf(operation),
-      description: operation.definition.description,
-      inputSchema: operation.definition.inputSchema,
-      example: exampleArguments(operation.definition.inputSchema),
-    };
+    return describedEntry(operation);
   });
 
   return text(JSON.stringify(described), described.every(entry => 'error' in entry));
+}
+
+/** What describe_operation returns for one operation. */
+function describedEntry(operation: Operation): JsonObject {
+  return {
+    id: operation.id,
+    title: operation.title,
+    category: operation.category,
+    runWith: runToolOf(operation),
+    description: operation.definition.description,
+    inputSchema: operation.definition.inputSchema,
+    example: exampleArguments(operation.definition.inputSchema),
+  };
+}
+
+const describeCosts = new Map<string, number>();
+
+/** Roughly how many tokens describe_operation takes to describe an operation, as a search shows it. */
+export function describeTokens(operation: Operation): number {
+  let cost = describeCosts.get(operation.id);
+
+  if (cost === undefined) {
+    cost = estimateTokens(describedEntry(operation));
+    describeCosts.set(operation.id, cost);
+  }
+
+  return cost;
 }
 
 /**
