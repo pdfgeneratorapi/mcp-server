@@ -82,11 +82,19 @@ When a client connects, you sign in to PDF Generator API and choose:
 - **What it may do**, per module: templates, documents, forms and workspaces can each be None, Read only or Full; e-invoices and PDF tools are allowed or not. Full includes deleting, which the consent screen marks as permanent.
 - **How long it lasts**: 1, 7, 30 or 90 days. A connection unused for 30 days also ends.
 
-The client only sees the tools your choices allow. If it calls a tool outside them, it is asked to reconnect with the missing permission.
+The client only finds the operations your choices allow. If it runs one outside them, it is asked to reconnect with the missing permission.
 
 You get an email the first time an application connects to a workspace. To see or end connections, open **Settings → Connected applications** in the PDF Generator API dashboard. Clients that support it also end their connection when you remove the server.
 
 ## What it can do
+
+The server lists four tools and reaches every operation through them, so a client loads a few kilobytes of tool definitions instead of one tool per operation:
+
+- `search_operations` finds the operations for a task, and shows each one's ID, the tool that runs it and how many tokens its schema costs.
+- `describe_operation` returns what the operations a client is about to run take, with example arguments.
+- `read_operation` runs an operation that only reads, and `call_operation` one that creates, changes or deletes something, so a client can ask before it changes anything.
+
+The operations:
 
 - **Templates**: list, read, create, update, copy, import from PDF, validate, manage versions, browse the template library, list the fonts templates can use and open the template editor.
 - **Template builder**: `get_builder_guide`, `list_builder_tools` and `run_builder_tool` give the assistant the granular steps the PDF Generator API editor uses to build a template (add, change, move and remove components, pages and table rows; validate). The assistant does the work with its own model, so building a template this way spends none of your workspace's AI credits.
@@ -100,6 +108,10 @@ You get an email the first time an application connects to a workspace. To see o
 It also offers three prompts: `generate-pdf`, `convert-to-pdf` and `create-einvoice`.
 
 The server speaks MCP protocol revision 2026-07-28, which needs no session, and still serves clients that open with the 2025-era `initialize` handshake.
+
+## Upgrading from 5.x
+
+Version 6 lists four tools instead of one per operation. A client that called an operation as a tool, such as `get_templates`, now runs it with `read_operation`, or with `call_operation` if it creates, changes or deletes something, after `describe_operation` shows its arguments. The operations take the same arguments and return the same results. The per-request log line names the operation a run ran in `operation`.
 
 ## Upgrading from 4.x
 
@@ -167,9 +179,9 @@ HTTP mode accepts only access tokens issued by the authorization server in `OAUT
 | `MCP_ALLOWED_HOSTS` | HTTP | — | Extra hosts this server answers for, besides the one in `MCP_RESOURCE_URL` |
 | `CORS_ORIGIN` | HTTP | `*` | Comma-separated allowed origins |
 
-### Regenerating the tools
+### Regenerating the operations
 
-The API tools are generated from the OpenAPI v4 specification in `docs/apiv4.json`:
+The API operations are generated from the OpenAPI v4 specification in `docs/apiv4.json`:
 
 ```bash
 ./scripts/generate-mcp.sh
