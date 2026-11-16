@@ -19,6 +19,7 @@ const {
   isRunTool,
   metaTools,
   notGrantedMessage,
+  operationExample,
   resolveRun,
   runToolOf,
   scopedCallOf,
@@ -409,6 +410,17 @@ describe('exampleArguments', () => {
       .toEqual({ s: '<s>' });
   });
 
+  /** Their schemas require no field of the template, so an example built from them would be empty. */
+  it.each([['generate_document'], ['preview_template']])('gives %s a template ID and data from the API spec', (id) => {
+    expect(operationExample(operation(id))).toMatchObject({
+      requestBody: { template: { id: 19375, data: { id: 123, name: 'John Smith', birthdate: '2000-01-01', role: 'Developer' } } },
+    });
+  });
+
+  it('builds the example of any other operation from its schema', () => {
+    expect(operationExample(operation('delete_template'))).toEqual({ templateId: 1 });
+  });
+
   it('gives an empty object for a schema that is not an object', () => {
     expect(exampleArguments({ type: 'string' })).toEqual({});
   });
@@ -417,7 +429,7 @@ describe('exampleArguments', () => {
   it.each(all.map(item => [item.id]))('gives %s arguments its schema accepts', async (id) => {
     mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{}') });
     const { definition } = operation(id);
-    const result = await executeApiTool(id, definition, exampleArguments(definition.inputSchema));
+    const result = await executeApiTool(id, definition, operationExample(operation(id)));
 
     expect(textOf(result)).not.toMatch(/^Invalid arguments/);
   });

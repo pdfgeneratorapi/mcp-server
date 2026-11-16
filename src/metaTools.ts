@@ -6,6 +6,7 @@
 import type { CallToolResult } from '@modelcontextprotocol/server';
 import type { JsonObject } from './types.js';
 import type { ToolAnnotations } from './annotations.js';
+import { PREVIEW_TEMPLATE } from './preview.js';
 import {
   CATEGORIES,
   DEFAULT_SEARCH_LIMIT,
@@ -30,6 +31,19 @@ export const DELETE_OPERATION = 'delete_operation';
 export const MAX_DESCRIBED_OPERATIONS = 5;
 
 const MAX_EXAMPLE_DEPTH = 10;
+
+/** The API spec's example data for a template. */
+const SPEC_EXAMPLE_DATA = { id: 123, name: 'John Smith', birthdate: '2000-01-01', role: 'Developer' };
+
+/**
+ * Example arguments for the operations a client most often starts from whose schemas require no
+ * field of their template, so an example built from the schema would be empty. The template ID and
+ * data are the API spec's examples.
+ */
+const EXAMPLE_ARGUMENTS: Record<string, JsonObject> = {
+  generate_document: { requestBody: { template: { id: 19375, data: SPEC_EXAMPLE_DATA }, format: 'pdf' } },
+  [PREVIEW_TEMPLATE]: { requestBody: { template: { id: 19375, data: SPEC_EXAMPLE_DATA }, pages: '1' } },
+};
 
 export interface MetaTool {
   name: string;
@@ -262,8 +276,15 @@ function describedEntry(operation: Operation): JsonObject {
     runWith: runToolOf(operation),
     description: operation.definition.description,
     inputSchema: operation.definition.inputSchema,
-    example: exampleArguments(operation.definition.inputSchema),
+    example: operationExample(operation),
   };
+}
+
+/** The example arguments describe_operation shows for an operation. */
+export function operationExample(operation: Operation): JsonObject {
+  return Object.hasOwn(EXAMPLE_ARGUMENTS, operation.id)
+    ? EXAMPLE_ARGUMENTS[operation.id]
+    : exampleArguments(operation.definition.inputSchema);
 }
 
 const describeCosts = new Map<string, number>();
