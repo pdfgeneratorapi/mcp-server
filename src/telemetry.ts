@@ -8,14 +8,14 @@ import { CLIENT_INFO_META_KEY, PROTOCOL_VERSION_META_KEY, type AuthInfo } from '
 import { log } from './logger.js';
 import { RUN_BUILDER_TOOL } from './builder.js';
 import { CALL_OPERATION, READ_OPERATION } from './metaTools.js';
+import { operations } from './operations.js';
 
 export const REQUEST_MESSAGE = 'MCP request';
 
 const MAX_TEXT_LENGTH = 200;
 
-// An operation and a builder tool are named by an argument, so only a value shaped like a tool
-// name is logged
-const TOOL_NAME = /^[a-z][a-z0-9_]{0,63}$/;
+// A builder tool is named by an argument, so only a value shaped like a tool name is logged
+const BUILDER_TOOL_NAME = /^[a-z][a-z0-9_]{0,63}$/;
 
 // Why a request was answered with this status before it reached the MCP handler
 const REFUSALS: Record<number, string> = {
@@ -102,11 +102,14 @@ export function describeRequest(body: unknown): Pick<RequestFacts, 'method' | 't
   };
 }
 
-/** The operation a read_operation or call_operation call names. */
+/**
+ * The operation a read_operation or call_operation call names. It is an argument, so only the ID
+ * of an operation that exists is logged.
+ */
 export function operationOf(tool: string, args: unknown): string | undefined {
   const operation = (args as { id?: unknown } | null | undefined)?.id;
 
-  return (tool === READ_OPERATION || tool === CALL_OPERATION) && typeof operation === 'string' && TOOL_NAME.test(operation)
+  return (tool === READ_OPERATION || tool === CALL_OPERATION) && typeof operation === 'string' && operations.has(operation)
     ? operation
     : undefined;
 }
@@ -119,7 +122,7 @@ export function builderToolOf(tool: string, args: unknown): string | undefined {
     : [operation, (args as { arguments?: unknown } | null | undefined)?.arguments];
   const builderTool = (builderArgs as { tool?: unknown } | null | undefined)?.tool;
 
-  return name === RUN_BUILDER_TOOL && typeof builderTool === 'string' && TOOL_NAME.test(builderTool)
+  return name === RUN_BUILDER_TOOL && typeof builderTool === 'string' && BUILDER_TOOL_NAME.test(builderTool)
     ? builderTool
     : undefined;
 }

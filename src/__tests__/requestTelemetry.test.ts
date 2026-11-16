@@ -317,7 +317,7 @@ describe('request telemetry', () => {
     expect(output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n')).not.toContain(query);
   });
 
-  /** The operation is an argument too: only a value shaped like an operation name is logged. */
+  /** The operation is an argument too: only the ID of an operation that exists is logged. */
   it('leaves out an operation value that is not an operation name, and the operation arguments', async () => {
     const token = 'user-7.client-1.templates~write';
     const argument = 'Quarterly invoice for a customer';
@@ -329,6 +329,18 @@ describe('request telemetry', () => {
     expect(call).toEqual(expect.objectContaining({ tool: 'call_operation', refusal: 'unknown_operation' }));
     expect(call).not.toHaveProperty('operation');
     expect(output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n')).not.toContain(argument);
+  });
+
+  it('leaves out an operation ID no operation has, even one shaped like a name', async () => {
+    const token = 'user-7.client-1.templates~write';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'call_operation', { id: 'acme_payroll_export' });
+
+    const call = requestLines().find(line => line.method === 'tools/call');
+    expect(call).toEqual(expect.objectContaining({ tool: 'call_operation', refusal: 'unknown_operation' }));
+    expect(call).not.toHaveProperty('operation');
+    expect(output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n')).not.toContain('acme_payroll_export');
   });
 
   it('logs a request without a token', async () => {
