@@ -285,6 +285,22 @@ describe('request telemetry', () => {
     })]);
   });
 
+  it('names the operation of a run with its arguments beside the ID, and none of their values', async () => {
+    const token = 'user-7.client-1.templates~read';
+    const search = 'Quarterly invoice for a customer';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'read_operation', { id: 'get_templates', search });
+
+    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([expect.objectContaining({
+      tool: 'read_operation',
+      operation: 'get_templates',
+      outcome: 'refused',
+      refusal: 'misplaced_arguments',
+    })]);
+    expect(output.filter(line => line.includes(REQUEST_MESSAGE)).join('\n')).not.toContain(search);
+  });
+
   it('names the builder tool of a builder run made through call_operation', async () => {
     mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"response":{"status":"ok"}}') });
     const token = 'user-7.client-1.templates~write';
