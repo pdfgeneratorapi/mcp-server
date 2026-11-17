@@ -71,6 +71,9 @@ const runInputSchema = {
   required: ['id'],
 };
 
+/** The keys a run tool takes. */
+const RUN_KEYS = Object.keys(runInputSchema.properties);
+
 export const metaTools: Map<string, MetaTool> = new Map([
   [SEARCH_OPERATIONS, {
     name: SEARCH_OPERATIONS,
@@ -325,13 +328,12 @@ export function resolveRun(toolName: string, args: JsonObject): RunResolution {
 
   // An argument next to the ID would be dropped, and the operation run without it. A null one
   // drops nothing: a client may send null for what it leaves out.
-  const misplaced = Object.keys(args).filter(key => key !== 'id' && key !== 'arguments' && args[key] != null);
+  const misplaced = Object.keys(args).filter(key => !RUN_KEYS.includes(key) && args[key] != null);
 
-  // Not "put it inside arguments": it may be there already, or be the arguments under another name
   if (misplaced.length > 0) {
     return {
       refusal: 'misplaced_arguments',
-      message: `${toolName} takes only id and arguments, not ${listed(misplaced)}. Give every argument of "${id}" inside arguments, named as ${DESCRIBE_OPERATION} shows them.`,
+      message: `${toolName} takes only ${listed(RUN_KEYS)}, not ${listed(misplaced)}. Give every argument of "${id}" inside arguments, named as ${DESCRIBE_OPERATION} shows them.`,
     };
   }
 
