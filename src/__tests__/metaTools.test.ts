@@ -82,6 +82,14 @@ describe('the meta-tools', () => {
     expect(isRunTool(name)).toBe(true);
   });
 
+  it.each([[READ_OPERATION], [CALL_OPERATION], [DELETE_OPERATION]])('tell a client to give every argument inside arguments, in %s and its arguments field', (name) => {
+    const tool = metaTools.get(name);
+
+    expect(tool?.description).toContain("Give the operation's ID, and every argument it takes inside arguments, as describe_operation shows them.");
+    expect((tool?.inputSchema.properties as any).arguments.description)
+      .toBe('Every argument of the operation, as the input schema describe_operation returns gives them. No argument goes beside id.');
+  });
+
   it('name the tool that runs each operation', () => {
     expect(runToolOf(operation('get_templates'))).toBe('read_operation');
     expect(runToolOf(operation('preview_template'))).toBe('read_operation');
@@ -156,10 +164,10 @@ describe('search_operations', () => {
   });
 
   it.each([[25], [100]])('only says to narrow the search when the limit, given as %d, is already the most', (limit) => {
-    const lines = textOf(searchOperationsResult({ limit }, all)).split('\n');
+    const lines = textOf(searchOperationsResult({ limit }, all.slice(0, 30))).split('\n');
 
     expect(lines).toHaveLength(27);
-    expect(lines[26]).toBe('Showing 25 of 68: narrow the search to see the rest.');
+    expect(lines[26]).toBe('Showing 25 of 30: narrow the search to see the rest.');
   });
 
   it('says nothing more when it lists every match', () => {
@@ -293,12 +301,20 @@ describe('resolveRun', () => {
     [CALL_OPERATION, {}, 'invalid_arguments', 'Give the ID of an operation, from search_operations.'],
     [CALL_OPERATION, { id: '' }, 'invalid_arguments', 'Give the ID of an operation, from search_operations.'],
     [READ_OPERATION, { id: 'get_template', arguments: [7] }, 'invalid_arguments', 'arguments must be an object, as describe_operation shows for "get_template".'],
-    [READ_OPERATION, { id: 'get_templates', search: 'invoice' }, 'invalid_arguments', 'Put search inside arguments: read_operation takes only id and arguments.'],
-    [READ_OPERATION, { id: 'get_templates', arguments: { page: 2 }, search: 'invoice' }, 'invalid_arguments', 'Put search inside arguments: read_operation takes only id and arguments.'],
-    [CALL_OPERATION, { id: 'run_builder_tool', template_id: 7, tool: 'add_component' }, 'invalid_arguments', 'Put template_id and tool inside arguments: call_operation takes only id and arguments.'],
-    [DELETE_OPERATION, { id: 'delete_template', templateId: 7, force: true, reason: 'old' }, 'invalid_arguments', 'Put templateId, force and reason inside arguments: delete_operation takes only id and arguments.'],
+    [READ_OPERATION, { id: 'get_templates', search: 'invoice' }, 'misplaced_arguments', 'read_operation takes only id and arguments, not search. Give every argument of "get_templates" inside arguments, named as describe_operation shows them.'],
+    [READ_OPERATION, { id: 'get_templates', arguments: { page: 2 }, search: 'invoice' }, 'misplaced_arguments', 'read_operation takes only id and arguments, not search. Give every argument of "get_templates" inside arguments, named as describe_operation shows them.'],
+    [READ_OPERATION, { id: 'get_templates', arguments: { search: 'invoice' }, search: 'invoice' }, 'misplaced_arguments', 'read_operation takes only id and arguments, not search. Give every argument of "get_templates" inside arguments, named as describe_operation shows them.'],
+    [READ_OPERATION, { id: 'get_templates', params: { search: 'invoice' } }, 'misplaced_arguments', 'read_operation takes only id and arguments, not params. Give every argument of "get_templates" inside arguments, named as describe_operation shows them.'],
+    [CALL_OPERATION, { id: 'run_builder_tool', template_id: 7, tool: 'add_component' }, 'misplaced_arguments', 'call_operation takes only id and arguments, not template_id and tool. Give every argument of "run_builder_tool" inside arguments, named as describe_operation shows them.'],
+    [DELETE_OPERATION, { id: 'delete_template', templateId: 7, force: true, reason: 'old' }, 'misplaced_arguments', 'delete_operation takes only id and arguments, not templateId, force and reason. Give every argument of "delete_template" inside arguments, named as describe_operation shows them.'],
   ])('%s refuses %j', (tool, args, refusal, message) => {
     expect(resolveRun(tool, args)).toEqual({ refusal, message });
+  });
+
+  /** A client may send null for an argument it leaves out, and a null beside the ID drops nothing. */
+  it('takes a key beside the ID that is null as one left out', () => {
+    expect(resolveRun(READ_OPERATION, { id: 'get_templates', arguments: { search: 'invoice' }, search: null }))
+      .toEqual({ operation: operation('get_templates'), args: { search: 'invoice' } });
   });
 
   it('runs a builder tool that only reads with read_operation, and one that changes the template with call_operation', () => {
@@ -532,6 +548,14 @@ describe('the server', () => {
 
     expect(result.isError).toBe(true);
     expect(textOf(result as any)).toBe('Error: Unknown tool requested: make_coffee. Find what you need with search_operations.');
+  });
+
+  it('refuses a run with arguments beside the ID before calling the API', async () => {
+    const result = await (await connectedClient()).callTool({ name: READ_OPERATION, arguments: { id: 'get_templates', search: 'invoice' } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result as any)).toBe('Error: read_operation takes only id and arguments, not search. Give every argument of "get_templates" inside arguments, named as describe_operation shows them.');
+    expect(mockAxios).not.toHaveBeenCalled();
   });
 
   it('refuses a run with the wrong tool before calling the API', async () => {

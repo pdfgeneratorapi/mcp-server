@@ -53,7 +53,7 @@ export interface MetaTool {
 }
 
 /** Why a run was refused before it reached the API, as telemetry records it. */
-export type RunRefusal = 'invalid_arguments' | 'unknown_operation' | 'wrong_run_tool';
+export type RunRefusal = 'invalid_arguments' | 'misplaced_arguments' | 'unknown_operation' | 'wrong_run_tool';
 
 export type RunResolution =
   | { operation: Operation; args: JsonObject }
@@ -65,7 +65,7 @@ const runInputSchema = {
     id: { type: 'string', description: `ID of the operation, from ${SEARCH_OPERATIONS}.` },
     arguments: {
       type: 'object',
-      description: `The operation's arguments, as the input schema ${DESCRIBE_OPERATION} returns gives them.`,
+      description: `Every argument of the operation, as the input schema ${DESCRIBE_OPERATION} returns gives them. No argument goes beside id.`,
     },
   },
   required: ['id'],
@@ -111,19 +111,19 @@ export const metaTools: Map<string, MetaTool> = new Map([
   }],
   [READ_OPERATION, {
     name: READ_OPERATION,
-    description: `Runs an operation that only reads: one that lists or gets something, a schema, a preview, the service status, or a template builder tool that only reads. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them. An operation that creates or changes something runs with ${CALL_OPERATION}, and one that deletes something with ${DELETE_OPERATION}.`,
+    description: `Runs an operation that only reads: one that lists or gets something, a schema, a preview, the service status, or a template builder tool that only reads. Give the operation's ID, and every argument it takes inside arguments, as ${DESCRIBE_OPERATION} shows them. An operation that creates or changes something runs with ${CALL_OPERATION}, and one that deletes something with ${DELETE_OPERATION}.`,
     inputSchema: runInputSchema,
     annotations: { title: 'Run a Read-Only Operation', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
   }],
   [CALL_OPERATION, {
     name: CALL_OPERATION,
-    description: `Runs an operation that creates or changes something, or that generates or converts a document: create or update a template, generate a document, convert HTML to PDF, or run a template builder tool that changes the template. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them. Ask for a document as a link (output url or viewer) only when the user wants one: a link stores the document for 30 days. An operation that only reads is better run with ${READ_OPERATION}, and one that deletes something runs with ${DELETE_OPERATION}.`,
+    description: `Runs an operation that creates or changes something, or that generates or converts a document: create or update a template, generate a document, convert HTML to PDF, or run a template builder tool that changes the template. Give the operation's ID, and every argument it takes inside arguments, as ${DESCRIBE_OPERATION} shows them. Ask for a document as a link (output url or viewer) only when the user wants one: a link stores the document for 30 days. An operation that only reads is better run with ${READ_OPERATION}, and one that deletes something runs with ${DELETE_OPERATION}.`,
     inputSchema: runInputSchema,
     annotations: { title: 'Run an Operation', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
   }],
   [DELETE_OPERATION, {
     name: DELETE_OPERATION,
-    description: `Runs an operation that deletes something: a template, a template version, a document, a workspace or a form. What it deletes cannot be restored, so make sure the user wants it gone. Give the operation's ID and its arguments, as ${DESCRIBE_OPERATION} shows them.`,
+    description: `Runs an operation that deletes something: a template, a template version, a document, a workspace or a form. What it deletes cannot be restored, so make sure the user wants it gone. Give the operation's ID, and every argument it takes inside arguments, as ${DESCRIBE_OPERATION} shows them.`,
     inputSchema: runInputSchema,
     // Not idempotent: it runs anything below a delete too, such as generating a document
     annotations: { title: 'Run a Delete Operation', readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
@@ -231,9 +231,7 @@ export function searchOperationsResult(args: JsonObject, granted: Operation[]): 
     'id | title | category | run with | tokens to describe',
     ...found.map(operation => [operation.id, operation.title, operation.category, runToolOf(operation), describeTokens(operation)].join(' | ')),
     ...(total > found.length
-      ? [found.length === MAX_SEARCH_LIMIT
-        ? `Showing ${found.length} of ${total}: narrow the search to see the rest.`
-        : `Showing ${found.length} of ${total}: raise limit, up to ${MAX_SEARCH_LIMIT}, or narrow the search to see the rest.`]
+      ? [`Showing ${found.length} of ${total}: ${found.length < MAX_SEARCH_LIMIT ? `raise limit, up to ${MAX_SEARCH_LIMIT}, or ` : ''}narrow the search to see the rest.`]
       : []),
   ].join('\n'));
 }
@@ -325,11 +323,16 @@ export function resolveRun(toolName: string, args: JsonObject): RunResolution {
     return { refusal: 'invalid_arguments', message: `arguments must be an object, as ${DESCRIBE_OPERATION} shows for "${id}".` };
   }
 
-  // An argument next to the ID would be dropped, and the operation run without it
-  const misplaced = Object.keys(args).filter(key => key !== 'id' && key !== 'arguments');
+  // An argument next to the ID would be dropped, and the operation run without it. A null one
+  // drops nothing: a client may send null for what it leaves out.
+  const misplaced = Object.keys(args).filter(key => key !== 'id' && key !== 'arguments' && args[key] != null);
 
+  // Not "put it inside arguments": it may be there already, or be the arguments under another name
   if (misplaced.length > 0) {
-    return { refusal: 'invalid_arguments', message: `Put ${listed(misplaced)} inside arguments: ${toolName} takes only id and arguments.` };
+    return {
+      refusal: 'misplaced_arguments',
+      message: `${toolName} takes only id and arguments, not ${listed(misplaced)}. Give every argument of "${id}" inside arguments, named as ${DESCRIBE_OPERATION} shows them.`,
+    };
   }
 
   const level = callLevel(operation, operationArgs);
