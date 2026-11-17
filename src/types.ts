@@ -25,4 +25,6 @@ export interface McpToolDefinition {
      * InvalidArgumentsError.
      */
     prepareRequestBody?: (body: JsonObject) => JsonObject;
+    /** Whether one call only reads, for an operation whose arguments decide whether it changes anything. */
+    readOnlyCall?: (args: JsonObject) => boolean;
 }

@@ -58,8 +58,8 @@ The server keeps the API credential of a connection for a few minutes. If it sti
 2. The protected resource metadata names this server as the resource and an authorization server.
 3. The authorization server metadata names that issuer and supports `S256`, registration, revocation and Client ID Metadata Documents.
 4. It signs in: it registers a client, prints the authorization URL to open in a browser, receives the code on a loopback address, checks the `iss` parameter and exchanges the code for a token with `resource`. Pass an access token in `MCP_ACCESS_TOKEN` to skip this step.
-5. A 2025-era client opens a session, lists the tools and calls `get_status`.
-6. A 2026-07-28 client discovers the server, lists the tools and calls `get_status`.
+5. A 2025-era client opens a session, lists the tools and runs `get_status` with `read_operation`.
+6. A 2026-07-28 client discovers the server, lists the tools and runs `get_status` with `read_operation`.
 7. The access token is refused by the API itself, so the tool calls must have reached the API with a credential the server obtained for the grant.
 8. It revokes the token it obtained.
 

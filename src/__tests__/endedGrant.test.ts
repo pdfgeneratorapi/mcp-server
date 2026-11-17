@@ -67,7 +67,7 @@ async function legacyCall(url: string, sessionId: string, id = 2) {
   const response = await fetch(url, {
     method: 'POST',
     headers: headers({ 'mcp-session-id': sessionId }),
-    body: JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'get_status', arguments: {} } }),
+    body: JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: 'read_operation', arguments: { id: 'get_status' } } }),
   });
 
   return { response, body: await response.text() };
@@ -95,14 +95,14 @@ describe('a connection that has ended', () => {
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: headers({ 'MCP-Protocol-Version': MODERN, 'Mcp-Method': 'tools/call', 'Mcp-Name': 'get_status' }),
+      headers: headers({ 'MCP-Protocol-Version': MODERN, 'Mcp-Method': 'tools/call', 'Mcp-Name': 'read_operation' }),
       body: JSON.stringify({
         jsonrpc: '2.0',
         id: 1,
         method: 'tools/call',
         params: {
-          name: 'get_status',
-          arguments: {},
+          name: 'read_operation',
+          arguments: { id: 'get_status' },
           _meta: {
             'io.modelcontextprotocol/protocolVersion': MODERN,
             'io.modelcontextprotocol/clientInfo': { name: 'test', version: '1' },

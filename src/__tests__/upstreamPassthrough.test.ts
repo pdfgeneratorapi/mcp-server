@@ -66,7 +66,7 @@ async function callTool(credentials: { get: jest.Mock<GetCredential>; invalidate
   const call = await fetch(url, {
     method: 'POST',
     headers: { ...JSON_RPC_HEADERS, 'mcp-session-id': sessionId },
-    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'get_status', arguments: {} } }),
+    body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'read_operation', arguments: { id: 'get_status' } } }),
   });
 
   return call.text();

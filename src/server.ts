@@ -9,11 +9,25 @@ import { SERVER_NAME, SERVER_VERSION } from './config.js';
 import { SERVER_ICON } from './icon.js';
 import { log } from './logger.js';
 import { simplifySchemaForOpenAI } from './schema.js';
-import { catalogue } from './catalogue.js';
+import {
+    CALL_OPERATION,
+    DELETE_OPERATION,
+    DESCRIBE_OPERATION,
+    READ_OPERATION,
+    SEARCH_OPERATIONS,
+    describeOperationsResult,
+    grantedOperations,
+    isRunTool,
+    metaTools,
+    resolveRun,
+    notGrantedMessage,
+    searchOperationsResult,
+    unknownToolMessage,
+} from './metaTools.js';
 import { executeApiTool } from './execute.js';
 import { isEndedGrant, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
-import { loadScopeEnforcement, mayCallTool, visibleTools } from './auth/scopes.js';
-import { builderToolOf, elapsedSince, type ToolCallRecord } from './telemetry.js';
+import { loadScopeEnforcement, mayCallTool } from './auth/scopes.js';
+import { builderToolOf, elapsedSince, operationOf, type ToolCallRecord } from './telemetry.js';
 import type { AuthInfo } from '@modelcontextprotocol/server';
 
 /** Told how each tool call went, once it has an outcome. */
@@ -23,79 +37,16 @@ const ENDED_CONNECTION_MESSAGE = 'This connection has ended: it was revoked, has
     + 'Send the request again, and you will be asked to sign in.';
 
 /**
- * Tool annotations — hints for MCP clients about tool behavior
+ * What a client reads once on connecting: what the server does, how to find and run its operations,
+ * and the operations most tasks start from, named so the client can describe them without a search.
  */
-const toolAnnotations: Record<string, { title: string; readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean }> = {
-    get_status:                          { title: "Get API Status",                      readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    add_watermark:                       { title: "Add Watermark to PDF",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    encrypt_document:                    { title: "Encrypt PDF Document",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    decrypt_document:                    { title: "Decrypt PDF Document",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    optimize_document:                   { title: "Optimize PDF Size",                   readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    make_accessible:                     { title: "Add Accessibility Tags to PDF",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    extract_form_fields:                  { title: "Extract Form Fields from PDF",        readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    fill_form_fields:                     { title: "Fill PDF Form Fields",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    get_templates:                       { title: "List Templates",                      readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    create_template:                     { title: "Create Template",                     readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    get_template_schema:                  { title: "Get Template JSON Schema",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    import_template:                     { title: "Import PDF as Template",              readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    validate_template:                   { title: "Validate Template Configuration",     readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    measure_text:                        { title: "Measure Text",                       readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_template:                        { title: "Get Template Details",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    update_template:                     { title: "Update Template",                     readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    delete_template:                     { title: "Delete Template",                     readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
-    get_template_data:                    { title: "Get Template Data Fields",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    copy_template:                       { title: "Copy Template",                       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    open_editor:                         { title: "Open Template Editor",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    list_template_versions:               { title: "List Template Versions",              readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_template_version:                 { title: "Get Template Version",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    delete_template_version:              { title: "Delete Template Version",             readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
-    promote_template_version:             { title: "Promote Template Version",            readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_documents:                       { title: "List Generated Documents",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_document:                        { title: "Get Document Details",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    delete_document:                     { title: "Delete Document",                     readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
-    generate_document:                   { title: "Generate PDF Document",               readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    generate_document_async:       { title: "Generate PDF Document (Async)",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    generate_document_batch:              { title: "Generate Batch PDF Documents",        readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    generate_document_batch_async:  { title: "Generate Batch PDFs (Async)",         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    get_async_job_status:                  { title: "Get Async Job Status",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_workspaces:                      { title: "List Workspaces",                     readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    create_workspace:                    { title: "Create Workspace",                    readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    get_workspace:                       { title: "Get Workspace Details",               readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    delete_workspace:                    { title: "Delete Workspace",                    readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
-    convert_html_to_pdf:                    { title: "Convert HTML to PDF",                 readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    convert_url_to_pdf:                     { title: "Convert URL to PDF",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    get_forms:                           { title: "List Forms",                          readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_form_schema:                     { title: "Get Form JSON Schema",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    create_form:                         { title: "Create Form",                         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    import_form:                         { title: "Import PDF as Form",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    get_form:                            { title: "Get Form Details",                    readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    update_form:                         { title: "Update Form",                         readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    delete_form:                         { title: "Delete Form",                         readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
-    share_form:                          { title: "Create Form Sharing URL",             readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    generate_qr_code:                     { title: "Generate QR Code",                    readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    create_einvoice:                     { title: "Create E-Invoice (UBL/CII)",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    create_xrechnung_einvoice:            { title: "Create XRechnung E-Invoice",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    create_facturx_einvoice:              { title: "Create Factur-X E-Invoice",           readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    get_einvoice_schema:                  { title: "Get E-Invoice JSON Schema",           readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_document_actions:                { title: "List Document Actions",              readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_document_signatures:             { title: "Validate Document Signatures",       readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_document_versions:               { title: "List Document Versions",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    store_document:                      { title: "Store PDF in Document Storage",      readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    generate_viewer_url:                 { title: "Create Document Viewer URL",         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    open_form_builder:                   { title: "Open Form Builder",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    open_form_builder_for_existing_form: { title: "Open Form Builder for a Form",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    convert_pdf_to_image:                { title: "Convert PDF to Images",              readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    get_template_library:                { title: "List Library Templates",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_template_library_item:           { title: "Get Library Template",               readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_template_library_items:          { title: "Get Library Templates",              readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    list_fonts:                          { title: "List Fonts",                         readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    get_builder_guide:                   { title: "Get Template Builder Guide",         readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    list_builder_tools:                  { title: "List Template Builder Tools",        readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    // Changes are saved as template versions, so a removed component can be restored.
-    run_builder_tool:                    { title: "Run Template Builder Tool",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-    preview_template:                    { title: "Preview Template Pages",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
-    show_pdf_pages:                      { title: "Show PDF Pages",                     readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
-};
+const SERVER_INSTRUCTIONS = [
+    "This MCP server wraps the PDF Generator API v4: generate PDF documents from templates, manage templates and workspaces, convert HTML or a URL to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and work on PDFs: watermark, encrypt, optimize, add accessibility tags, fill form fields.",
+    `Its operations are not tools of their own. Find the ones for a task with ${SEARCH_OPERATIONS}, which lists each match's ID, the tool that runs it and how many tokens describing it costs. Read the arguments of the ones you will run with ${DESCRIBE_OPERATION}, then run each with ${READ_OPERATION} if it only reads, ${CALL_OPERATION} if it creates or changes something, or ${DELETE_OPERATION} if it deletes something. An operation named here can be described without searching for it first.`,
+    "To generate a document, list the templates with get_templates and run generate_document. To build or restyle a template step by step, or change a few of its components without resending it, read get_builder_guide, list the steps with list_builder_tools and apply them with run_builder_tool. To see how a template looks, saved or not, run preview_template: it shows up to 3 of its pages as images, free and stored nowhere; show_pdf_pages does the same for a PDF you already have. Don't generate a document just to look at it: generate_document uses credits. Ask for a document as a link (output url or viewer) only when the user wants a link: a link stores the document for 30 days.",
+    "To read a template only for its structure, pass images: omit to get_template, get_template_version, get_template_library_item or get_template_library_items: every embedded image is replaced by a short marker naming its type and size. A saved template read that way is changed with run_builder_tool, which keeps its images; a definition that still carries a marker is refused wherever it is sent, so to base a new template on a library template, read that one with its images. To open several library templates, use get_template_library_items with up to 5 ids at once, with images: omit unless the images are needed. To size a text box, measure its text with measure_text, up to 20 texts at once: it returns the lines a text breaks into at a width and its height, as the PDF draws them, so the box is neither cut nor too tall. Take every fontFamily from list_fonts.",
+    `The connection acts in the workspace the user chose when connecting, with the permissions they granted: ${SEARCH_OPERATIONS} finds only the operations those permissions allow.`,
+].join(' ');
 
 /**
  * Prompt definitions for guided workflows
@@ -103,10 +54,10 @@ const toolAnnotations: Record<string, { title: string; readOnlyHint?: boolean; d
 const prompts = [
     {
         name: "generate-pdf",
-        description: "Generate a PDF document by selecting a template and providing data to fill it with",
+        description: "Fill a template with data, preview it, and generate the PDF document when it is wanted",
         arguments: [
             { name: "templateId", description: "The ID of the template to use for PDF generation", required: true },
-            { name: "outputFormat", description: "Output format: base64, url, or file (default: url)", required: false },
+            { name: "outputFormat", description: "Output of the document: base64 or file; url or viewer only for a link, which stores the document for 30 days. Given, the document is generated after the preview; left out, only when asked for.", required: false },
         ]
     },
     {
@@ -144,48 +95,67 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         },
         {
             capabilities: { tools: {}, prompts: {} },
-            instructions: "This MCP server wraps the PDF Generator API v4. Use it to generate PDF documents from templates, manage templates and workspaces, convert HTML/URLs to PDF, create e-invoices (UBL, CII, XRechnung, Factur-X), and perform PDF operations like watermarking, encryption, optimization, accessibility tagging, and form filling. Start by listing templates with get_templates, then generate documents with generate_document. To build or restyle a template step by step, or change a few of its components without resending it, read get_builder_guide, list the steps with list_builder_tools and apply them with run_builder_tool. To see how a template looks, saved or not, call preview_template: it shows up to 3 of its pages as images, free and stored nowhere; show_pdf_pages does the same for a PDF you already have. Don't generate a document just to look at it: generate_document uses credits, and output url stores the document for 30 days. To read a template only for its structure, pass images: omit to get_template, get_template_version, get_template_library_item or get_template_library_items: every embedded image is replaced by a short marker naming its type and size. A saved template read that way is changed with run_builder_tool, which keeps its images; a definition that still carries a marker is refused wherever it is sent, so to base a new template on a library template, read that one with its images. To open several library templates, use get_template_library_items with up to 5 ids in one call, with images: omit unless the images are needed. To size a text box, measure its text with measure_text, up to 20 texts in one call: it returns the lines a text breaks into at a width and its height, as the PDF draws them, so the box is neither cut nor too tall. Take every fontFamily from list_fonts. The connection acts in the workspace the user chose when connecting, with the permissions they granted; tools outside those permissions are not listed.",
+            instructions: SERVER_INSTRUCTIONS,
         }
     );
 
-    server.setRequestHandler('tools/list', async (_request, ctx) => {
-        const enforcement = loadScopeEnforcement();
-        const scopes = ctx.http?.authInfo?.scopes ?? [];
-        const allowed = enforcement === 'off' ? null : new Set(visibleTools(scopes));
-        const toolsForClient: Tool[] = Array.from(catalogue.values())
-            .filter(def => allowed === null || allowed.has(def.name))
-            .map(def => ({
-            name: def.name,
-            description: def.description,
-            inputSchema: simplifySchemaForOpenAI(def.inputSchema),
-            annotations: toolAnnotations[def.name],
+    // All five are listed whatever the grant: search finds only what the grant allows, and a run
+    // outside it is answered with the step-up challenge that lets the user grant the permission.
+    server.setRequestHandler('tools/list', async () => {
+        const tools: Tool[] = Array.from(metaTools.values()).map(tool => ({
+            name: tool.name,
+            description: tool.description,
+            inputSchema: simplifySchemaForOpenAI(tool.inputSchema),
+            annotations: tool.annotations,
         }));
-        return { tools: toolsForClient };
+        return { tools };
     });
 
     server.setRequestHandler('tools/call', async (request: CallToolRequest, ctx: ServerContext): Promise<CallToolResult> => {
         const extra = { authInfo: ctx.http?.authInfo, sessionId: ctx.sessionId };
         const startedAt = performance.now();
         const { name: toolName, arguments: toolArgs } = request.params;
+        const operation = operationOf(toolName, toolArgs);
         const builderTool = builderToolOf(toolName, toolArgs);
-        const observe = (details: Omit<ToolCallRecord, 'tool' | 'builderTool' | 'durationMs'>) =>
-            onToolCall?.({ tool: toolName, builderTool, durationMs: elapsedSince(startedAt), ...details }, extra);
-        const toolDefinition = catalogue.get(toolName);
-        if (!toolDefinition) {
+        const observe = (details: Omit<ToolCallRecord, 'tool' | 'operation' | 'builderTool' | 'durationMs'>) =>
+            onToolCall?.({ tool: toolName, operation, builderTool, durationMs: elapsedSince(startedAt), ...details }, extra);
+        const enforcement = loadScopeEnforcement();
+        const scopes = extra.authInfo?.scopes ?? [];
+
+        if (toolName === SEARCH_OPERATIONS || toolName === DESCRIBE_OPERATION) {
+            const granted = grantedOperations(scopes, enforcement);
+            const result = toolName === SEARCH_OPERATIONS
+                ? searchOperationsResult(toolArgs ?? {}, granted)
+                : describeOperationsResult(toolArgs ?? {}, granted);
+            observe({ outcome: result.isError ? 'error' : 'ok' });
+            return result;
+        }
+
+        if (!isRunTool(toolName)) {
             log.warn(`Unknown tool requested: ${toolName}`);
             observe({ outcome: 'refused', refusal: 'unknown_tool' });
-            return { content: [{ type: "text", text: `Error: Unknown tool requested: ${toolName}` }], isError: true };
+            return { content: [{ type: "text", text: `Error: ${unknownToolMessage(toolName)}` }], isError: true };
         }
-        const enforcement = loadScopeEnforcement();
-        const decision = mayCallTool(toolName, extra.authInfo?.scopes ?? [], toolArgs ?? {});
+
+        const run = resolveRun(toolName, toolArgs ?? {});
+
+        if ('refusal' in run) {
+            observe({ outcome: 'refused', refusal: run.refusal });
+            return { content: [{ type: "text", text: `Error: ${run.message}` }], isError: true };
+        }
+
+        const operationName = run.operation.id;
+        const operationArgs = run.args;
+        const toolDefinition = run.operation.definition;
+        const decision = mayCallTool(operationName, scopes, operationArgs);
 
         if (!decision.allowed && enforcement !== 'off') {
-            log.warn(`Tool "${toolName}" needs scope "${decision.required}", which this token does not grant`);
+            log.warn(`Tool "${operationName}" needs scope "${decision.required}", which this token does not grant`);
 
             if (enforcement === 'enforce') {
                 observe({ outcome: 'refused', refusal: 'insufficient_scope' });
                 return {
-                    content: [{ type: "text", text: `Error: this connection is not allowed to call "${toolName}". It needs the "${decision.required}" permission; reconnect and grant it.` }],
+                    content: [{ type: "text", text: `Error: ${notGrantedMessage(operationName, decision.required)}` }],
                     isError: true,
                 };
             }
@@ -205,7 +175,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
             invalidate: () => credentials.invalidate(extra.authInfo),
         };
         let upstreamStatus: number | undefined;
-        const result = await executeApiTool(toolName, toolDefinition, toolArgs ?? {}, upstreamAuth, (status) => {
+        const result = await executeApiTool(operationName, toolDefinition, operationArgs, upstreamAuth, (status) => {
             upstreamStatus = status;
         });
         observe(ended
@@ -224,11 +194,13 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
 
         if (name === "generate-pdf") {
             const templateId = args?.templateId || "<TEMPLATE_ID>";
-            const outputFormat = args?.outputFormat || "url";
+            const generate = args?.outputFormat
+                ? `Then run generate_document with ${CALL_OPERATION}, with the template ID, the same data and output "${args.outputFormat}".`
+                : `Run generate_document with ${CALL_OPERATION} only when I want the document itself, with the output I ask for.`;
             return {
                 messages: [{
                     role: "user" as const,
-                    content: { type: "text" as const, text: `Generate a PDF document using template ID ${templateId}. First, call get_template_data with templateId ${templateId} to see the required data fields, then call generate_document with the template ID, appropriate data, and output format "${outputFormat}".` }
+                    content: { type: "text" as const, text: `Generate a PDF document using template ID ${templateId}. First run get_template_data with ${READ_OPERATION} and templateId ${templateId} to see the data fields the template uses. Then show the template filled with data for those fields: run preview_template with ${READ_OPERATION}, which shows up to 3 pages as images, free and stored nowhere. ${generate} ${DESCRIBE_OPERATION} shows the arguments of each.` }
                 }]
             };
         }
@@ -243,8 +215,8 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
                     content: {
                         type: "text" as const,
                         text: isUrl
-                            ? `Convert the URL "${source}" to a PDF document using convert_url_to_pdf with paper size "${paperSize}" and portrait orientation.`
-                            : `Convert the following HTML content to a PDF document using convert_html_to_pdf with paper size "${paperSize}" and portrait orientation:\n\n${source}`
+                            ? `Convert the URL "${source}" to a PDF document: run convert_url_to_pdf with ${CALL_OPERATION}, with paper size "${paperSize}" and portrait orientation. ${DESCRIBE_OPERATION} shows its arguments.`
+                            : `Convert the following HTML content to a PDF document: run convert_html_to_pdf with ${CALL_OPERATION}, with paper size "${paperSize}" and portrait orientation. ${DESCRIBE_OPERATION} shows its arguments.\n\n${source}`
                     }
                 }]
             };
@@ -258,7 +230,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
             return {
                 messages: [{
                     role: "user" as const,
-                    content: { type: "text" as const, text: `Create an e-invoice in ${format} format. First, call get_einvoice_schema to get the required data structure, then use ${tool} to generate the e-invoice.` }
+                    content: { type: "text" as const, text: `Create an e-invoice in ${format} format. First run get_einvoice_schema with ${READ_OPERATION} to get the data structure it takes. Then run ${tool} with ${CALL_OPERATION} to create the e-invoice; ${DESCRIBE_OPERATION} shows its arguments.` }
                 }]
             };
         }

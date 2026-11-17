@@ -1,0 +1,83 @@
+/**
+ * Hints for MCP clients about what each catalogue operation does: whether it only reads, and
+ * whether it can destroy data.
+ */
+export interface ToolAnnotations {
+    title: string;
+    readOnlyHint?: boolean;
+    destructiveHint?: boolean;
+    idempotentHint?: boolean;
+    openWorldHint?: boolean;
+}
+
+export const toolAnnotations: Record<string, ToolAnnotations> = {
+    get_status:                          { title: "Get API Status",                      readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    add_watermark:                       { title: "Add Watermark to PDF",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    encrypt_document:                    { title: "Encrypt PDF Document",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    decrypt_document:                    { title: "Decrypt PDF Document",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    optimize_document:                   { title: "Optimize PDF Size",                   readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    make_accessible:                     { title: "Add Accessibility Tags to PDF",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    extract_form_fields:                  { title: "Extract Form Fields from PDF",        readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    fill_form_fields:                     { title: "Fill PDF Form Fields",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_templates:                       { title: "List Templates",                      readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    create_template:                     { title: "Create Template",                     readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_template_schema:                  { title: "Get Template JSON Schema",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    import_template:                     { title: "Import PDF as Template",              readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    validate_template:                   { title: "Validate Template Configuration",     readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    measure_text:                        { title: "Measure Text",                       readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_template:                        { title: "Get Template Details",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    update_template:                     { title: "Update Template",                     readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    delete_template:                     { title: "Delete Template",                     readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
+    get_template_data:                    { title: "Get Template Data Fields",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    copy_template:                       { title: "Copy Template",                       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    open_editor:                         { title: "Open Template Editor",                readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    list_template_versions:               { title: "List Template Versions",              readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_template_version:                 { title: "Get Template Version",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    delete_template_version:              { title: "Delete Template Version",             readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
+    promote_template_version:             { title: "Promote Template Version",            readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_documents:                       { title: "List Generated Documents",            readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_document:                        { title: "Get Document Details",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    delete_document:                     { title: "Delete Document",                     readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
+    generate_document:                   { title: "Generate PDF Document",               readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    generate_document_async:       { title: "Generate PDF Document (Async)",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    generate_document_batch:              { title: "Generate Batch PDF Documents",        readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    generate_document_batch_async:  { title: "Generate Batch PDFs (Async)",         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_async_job_status:                  { title: "Get Async Job Status",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_workspaces:                      { title: "List Workspaces",                     readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    create_workspace:                    { title: "Create Workspace",                    readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_workspace:                       { title: "Get Workspace Details",               readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    delete_workspace:                    { title: "Delete Workspace",                    readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
+    convert_html_to_pdf:                    { title: "Convert HTML to PDF",                 readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    convert_url_to_pdf:                     { title: "Convert URL to PDF",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_forms:                           { title: "List Forms",                          readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_form_schema:                     { title: "Get Form JSON Schema",                readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    create_form:                         { title: "Create Form",                         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    import_form:                         { title: "Import PDF as Form",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_form:                            { title: "Get Form Details",                    readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    update_form:                         { title: "Update Form",                         readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    delete_form:                         { title: "Delete Form",                         readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: true },
+    share_form:                          { title: "Create Form Sharing URL",             readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    generate_qr_code:                     { title: "Generate QR Code",                    readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    create_einvoice:                     { title: "Create E-Invoice (UBL/CII)",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    create_xrechnung_einvoice:            { title: "Create XRechnung E-Invoice",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    create_facturx_einvoice:              { title: "Create Factur-X E-Invoice",           readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_einvoice_schema:                  { title: "Get E-Invoice JSON Schema",           readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_document_actions:                { title: "List Document Actions",              readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_document_signatures:             { title: "Validate Document Signatures",       readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_document_versions:               { title: "List Document Versions",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    store_document:                      { title: "Store PDF in Document Storage",      readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    generate_viewer_url:                 { title: "Create Document Viewer URL",         readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    open_form_builder:                   { title: "Open Form Builder",                  readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    open_form_builder_for_existing_form: { title: "Open Form Builder for a Form",       readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    convert_pdf_to_image:                { title: "Convert PDF to Images",              readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    get_template_library:                { title: "List Library Templates",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_template_library_item:           { title: "Get Library Template",               readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_template_library_items:          { title: "Get Library Templates",              readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    list_fonts:                          { title: "List Fonts",                         readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    get_builder_guide:                   { title: "Get Template Builder Guide",         readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    list_builder_tools:                  { title: "List Template Builder Tools",        readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    // Changes are saved as template versions, so a removed component can be restored.
+    run_builder_tool:                    { title: "Run Template Builder Tool",          readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+    preview_template:                    { title: "Preview Template Pages",             readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: true },
+    show_pdf_pages:                      { title: "Show PDF Pages",                     readOnlyHint: false, destructiveHint: false,                        openWorldHint: true },
+};
