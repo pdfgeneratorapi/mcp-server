@@ -155,6 +155,13 @@ describe('search_operations', () => {
     expect(lines[11]).toBe('Showing 10 of 23: raise limit, up to 25, or narrow the search to see the rest.');
   });
 
+  it.each([[25], [100]])('only says to narrow the search when the limit, given as %d, is already the most', (limit) => {
+    const lines = textOf(searchOperationsResult({ limit }, all)).split('\n');
+
+    expect(lines).toHaveLength(27);
+    expect(lines[26]).toBe('Showing 25 of 68: narrow the search to see the rest.');
+  });
+
   it('says nothing more when it lists every match', () => {
     const lines = textOf(searchOperationsResult({ category: 'templates', limit: 25 }, all)).split('\n');
 
@@ -286,6 +293,10 @@ describe('resolveRun', () => {
     [CALL_OPERATION, {}, 'invalid_arguments', 'Give the ID of an operation, from search_operations.'],
     [CALL_OPERATION, { id: '' }, 'invalid_arguments', 'Give the ID of an operation, from search_operations.'],
     [READ_OPERATION, { id: 'get_template', arguments: [7] }, 'invalid_arguments', 'arguments must be an object, as describe_operation shows for "get_template".'],
+    [READ_OPERATION, { id: 'get_templates', search: 'invoice' }, 'invalid_arguments', 'Put search inside arguments: read_operation takes only id and arguments.'],
+    [READ_OPERATION, { id: 'get_templates', arguments: { page: 2 }, search: 'invoice' }, 'invalid_arguments', 'Put search inside arguments: read_operation takes only id and arguments.'],
+    [CALL_OPERATION, { id: 'run_builder_tool', template_id: 7, tool: 'add_component' }, 'invalid_arguments', 'Put template_id and tool inside arguments: call_operation takes only id and arguments.'],
+    [DELETE_OPERATION, { id: 'delete_template', templateId: 7, force: true, reason: 'old' }, 'invalid_arguments', 'Put templateId, force and reason inside arguments: delete_operation takes only id and arguments.'],
   ])('%s refuses %j', (tool, args, refusal, message) => {
     expect(resolveRun(tool, args)).toEqual({ refusal, message });
   });
@@ -323,6 +334,7 @@ describe('scopedCallOf', () => {
     [READ_OPERATION, { id: 'delete_template' }],
     [CALL_OPERATION, { id: 'delete_template' }],
     [CALL_OPERATION, { id: 'make_coffee' }],
+    [CALL_OPERATION, { id: 'run_builder_tool', template_id: 7, tool: 'add_component' }],
   ])('checks nothing for %s %j, which runs no operation', (tool, args) => {
     expect(scopedCallOf(tool, args)).toBeNull();
   });

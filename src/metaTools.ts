@@ -231,7 +231,9 @@ export function searchOperationsResult(args: JsonObject, granted: Operation[]): 
     'id | title | category | run with | tokens to describe',
     ...found.map(operation => [operation.id, operation.title, operation.category, runToolOf(operation), describeTokens(operation)].join(' | ')),
     ...(total > found.length
-      ? [`Showing ${found.length} of ${total}: raise limit, up to ${MAX_SEARCH_LIMIT}, or narrow the search to see the rest.`]
+      ? [found.length === MAX_SEARCH_LIMIT
+        ? `Showing ${found.length} of ${total}: narrow the search to see the rest.`
+        : `Showing ${found.length} of ${total}: raise limit, up to ${MAX_SEARCH_LIMIT}, or narrow the search to see the rest.`]
       : []),
   ].join('\n'));
 }
@@ -302,8 +304,8 @@ export function describeTokens(operation: Operation): number {
 }
 
 /**
- * The operation a read_operation or call_operation call names, with its arguments, or why it
- * cannot run: an unknown operation, or one the other tool runs.
+ * The operation a run tool call names, with its arguments, or why it cannot run: an unknown
+ * operation, arguments put next to its ID, or an operation above what the tool runs.
  */
 export function resolveRun(toolName: string, args: JsonObject): RunResolution {
   const { id } = args;
@@ -323,6 +325,13 @@ export function resolveRun(toolName: string, args: JsonObject): RunResolution {
     return { refusal: 'invalid_arguments', message: `arguments must be an object, as ${DESCRIBE_OPERATION} shows for "${id}".` };
   }
 
+  // An argument next to the ID would be dropped, and the operation run without it
+  const misplaced = Object.keys(args).filter(key => key !== 'id' && key !== 'arguments');
+
+  if (misplaced.length > 0) {
+    return { refusal: 'invalid_arguments', message: `Put ${listed(misplaced)} inside arguments: ${toolName} takes only id and arguments.` };
+  }
+
   const level = callLevel(operation, operationArgs);
 
   // A run tool runs anything at its level or below: a read through call_operation is only asked
@@ -332,6 +341,11 @@ export function resolveRun(toolName: string, args: JsonObject): RunResolution {
   }
 
   return { operation, args: operationArgs };
+}
+
+/** Names as a sentence lists them: "a", "a and b", "a, b and c". */
+function listed(names: string[]): string {
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
 /**
