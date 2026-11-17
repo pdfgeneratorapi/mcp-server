@@ -8,6 +8,7 @@ import { describe, it, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { toolDefinitionMap } from '../tools.js';
+import { simplifySchemaForOpenAI } from '../schema.js';
 
 const spec = JSON.parse(readFileSync(resolve(process.cwd(), 'docs/apiv4.json'), 'utf8'));
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
@@ -152,5 +153,29 @@ describe('tool catalogue', () => {
 
   it('lists as known drift only fields that still drift', () => {
     expect(Object.keys(KNOWN_DRIFT).filter((field) => !drift.some((drifted) => drifted.field === field))).toEqual([]);
+  });
+});
+
+/**
+ * Clients check a tool's input schema against JSON Schema 2020-12 and leave out a tool whose schema
+ * is not one. In the spec, OpenAPI 3.0, exclusiveMinimum and exclusiveMaximum are booleans that make
+ * minimum and maximum exclusive; in JSON Schema they are the bound itself, a number.
+ */
+function booleanBounds(schema: any, path: string): string[] {
+  if (!schema || typeof schema !== 'object') return [];
+  return ['exclusiveMinimum', 'exclusiveMaximum']
+    .filter((keyword) => keyword in schema && typeof schema[keyword] !== 'number')
+    .map((keyword) => `${path}.${keyword}`)
+    .concat(Object.entries(schema).flatMap(([key, value]) => booleanBounds(value, `${path}.${key}`)));
+}
+
+describe('tool input schemas', () => {
+  it('give exclusive bounds as JSON Schema does, in the definitions and as listed to clients', () => {
+    const found = [...toolDefinitionMap.values()].flatMap((tool) => [
+      ...booleanBounds(tool.inputSchema, `${tool.name} definition`),
+      ...booleanBounds(simplifySchemaForOpenAI(tool.inputSchema), `${tool.name} listed`),
+    ]);
+
+    expect(found).toEqual([]);
   });
 });

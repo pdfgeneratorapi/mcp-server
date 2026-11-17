@@ -291,6 +291,7 @@ describe('tool argument schemas', () => {
     ['no text', { texts: [] }],
     ['more than 20 texts', { texts: Array.from({ length: 21 }, () => ({ text: 'Invoice', width: 3, fontSize: 12 })) }],
     ['a box with no width', { texts: [{ text: 'Invoice', width: 0, fontSize: 12 }] }],
+    ['a line height of 0', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, lineHeight: 0 }] }],
     ['a font size with a fraction', { texts: [{ text: 'Invoice', width: 3, fontSize: 12.5 }] }],
     ['a style that does not change the width', { texts: [{ text: 'Invoice', width: 3, fontSize: 12, fontType: ['underline'] }] }],
     ['a unit the API does not take', { unit: 'mm', texts: [{ text: 'Invoice', width: 3, fontSize: 12 }] }],
