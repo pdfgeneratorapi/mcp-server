@@ -297,6 +297,8 @@ describe('resolveRun', () => {
     [CALL_OPERATION, { id: 'delete_template' }, 'wrong_run_tool', '"delete_template" deletes data, so run it with delete_operation.'],
     [READ_OPERATION, { id: 'update_template' }, 'wrong_run_tool', '"update_template" changes data, so run it with call_operation.'],
     [READ_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'add_component' } }, 'wrong_run_tool', '"run_builder_tool" changes data, so run it with call_operation.'],
+    [READ_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'a_tool_added_later' } }, 'wrong_run_tool', '"run_builder_tool" changes data, so run it with call_operation.'],
+    [READ_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'Preview_Template' } }, 'wrong_run_tool', '"run_builder_tool" changes data, so run it with call_operation.'],
     [CALL_OPERATION, { id: 'make_coffee' }, 'unknown_operation', 'There is no operation "make_coffee". Find one with search_operations.'],
     [CALL_OPERATION, {}, 'invalid_arguments', 'Give the ID of an operation, from search_operations.'],
     [CALL_OPERATION, { id: '' }, 'invalid_arguments', 'Give the ID of an operation, from search_operations.'],
@@ -322,6 +324,14 @@ describe('resolveRun', () => {
       .toMatchObject({ operation: operation('run_builder_tool') });
     expect(resolveRun(CALL_OPERATION, { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'add_component' } }))
       .toMatchObject({ operation: operation('run_builder_tool') });
+  });
+
+  /** The builder's preview only lays the template out, so a read grant can look at its work. */
+  it.each([READ_OPERATION, CALL_OPERATION, DELETE_OPERATION])('runs the builder preview with %s', (tool) => {
+    expect(resolveRun(tool, {
+      id: 'run_builder_tool',
+      arguments: { template_id: 7, tool: 'preview_template', requestBody: { arguments: { pages: '1-3' } } },
+    })).toMatchObject({ operation: operation('run_builder_tool') });
   });
 
   it('runs anything through delete_operation, which clients ask about the most', () => {

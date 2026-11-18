@@ -23,6 +23,7 @@ const READ_ONLY_BUILDER_TOOLS = new Set([
   'list_children',
   'list_table_rows',
   'validate_template',
+  'preview_template',
 ]);
 
 export function builderToolChangesTemplate(tool: unknown): boolean {

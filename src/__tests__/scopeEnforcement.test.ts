@@ -152,6 +152,41 @@ describe('scope enforcement over HTTP', () => {
     expect(mockAxios).toHaveBeenCalledTimes(2);
   });
 
+  /** A refused run answers 200 too, so only the call to the builder shows the preview ran. */
+  it('lets a read grant run the builder preview through read_operation and through call_operation', async () => {
+    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
+    mockAxios.mockResolvedValue({ status: 200, headers: { 'content-type': 'application/json' }, data: Buffer.from('{"response":[]}') });
+    const token = 'user-a.client-1.templates~read';
+    const { url, sessionId } = await connect(token);
+    const preview = { id: 'run_builder_tool', arguments: { template_id: 7, tool: 'preview_template', requestBody: { arguments: { pages: '1-3' } } } };
+
+    const read = await callTool(url, token, sessionId, 'read_operation', preview);
+    const call = await callTool(url, token, sessionId, 'call_operation', preview);
+    await Promise.all([read.text(), call.text()]);
+
+    expect([read.status, call.status]).toEqual([200, 200]);
+    expect(mockAxios).toHaveBeenCalledTimes(2);
+    expect(mockAxios).toHaveBeenNthCalledWith(1, expect.objectContaining({ method: 'POST', url: expect.stringMatching(/\/templates\/7\/tools\/preview_template$/) }));
+    expect(mockAxios).toHaveBeenNthCalledWith(2, expect.objectContaining({ method: 'POST', url: expect.stringMatching(/\/templates\/7\/tools\/preview_template$/) }));
+  });
+
+  /** A name the read-only list does not hold, even one close to the preview, asks for write before reaching the builder. */
+  it('asks a read grant for templates:write to run a builder tool it does not know', async () => {
+    process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';
+    const token = 'user-a.client-1.templates~read';
+    const { url, sessionId } = await connect(token);
+
+    const response = await callTool(url, token, sessionId, 'call_operation', {
+      id: 'run_builder_tool',
+      arguments: { template_id: 7, tool: 'preview_templates' },
+    });
+    await response.text();
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get('www-authenticate')).toContain('scope="templates:read templates:write"');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
   /** A client signing in again for the permission would then only hear the run needs the other tool. */
   it('tells a run sent to the wrong tool which one to use, before asking for a permission', async () => {
     process.env.MCP_SCOPE_ENFORCEMENT = 'enforce';

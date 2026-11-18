@@ -61,7 +61,7 @@ describe('running the builder tools', () => {
 });
 
 describe('the scopes of the builder', () => {
-  it.each(['get_template_structure', 'list_pages', 'validate_template'])('reads with %s', (tool) => {
+  it.each(['get_template_structure', 'list_pages', 'validate_template', 'preview_template'])('reads with %s', (tool) => {
     expect(builderToolChangesTemplate(tool)).toBe(false);
     expect(requiredScopeForCall('run_builder_tool', { tool })).toBe('templates:read');
   });
@@ -77,6 +77,12 @@ describe('the scopes of the builder', () => {
   it('treats a builder tool it does not know as a write', () => {
     expect(requiredScopeForCall('run_builder_tool', { tool: 'a_tool_added_later' })).toBe('templates:write');
     expect(requiredScopeForCall('run_builder_tool', {})).toBe('templates:write');
+  });
+
+  /** Only the exact name is the preview: a name close to it is a tool the list does not know. */
+  it.each(['preview_templates', 'Preview_Template', ' preview_template', 'preview'])('treats %j, not the builder preview, as a write', (tool) => {
+    expect(builderToolChangesTemplate(tool)).toBe(true);
+    expect(requiredScopeForCall('run_builder_tool', { tool })).toBe('templates:write');
   });
 
   it('refuses a change on a read grant and allows it on a write grant', () => {
