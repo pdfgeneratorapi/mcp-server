@@ -59,6 +59,12 @@ describe('the server instructions', () => {
 
     expect(instructions).toContain('Ask for a document as a link (output url or viewer) only when the user wants a link: a link stores the document for 30 days.');
   });
+
+  it('say how lists are paged and how fast the API may be called', async () => {
+    const instructions = (await connectedClient()).getInstructions() ?? '';
+
+    expect(instructions).toContain('A list returns at most 10 records a page: narrow it with its search and filters rather than reading every page, and read the pages one after another, because the API takes 2 requests a second.');
+  });
 });
 
 describe('the meta-tool descriptions', () => {
