@@ -528,10 +528,13 @@ describe('the server', () => {
 
     const read = await client.callTool({ name: 'get_templates', arguments: {} });
     const call = await client.callTool({ name: 'delete_template', arguments: { templateId: 7 } });
+    const builder = await client.callTool({ name: 'run_builder_tool', arguments: { template_id: 7, tool: 'list_pages' } });
+    const staleList = ' If search_operations, describe_operation, read_operation, call_operation and delete_operation are not among your tools, your list of this server\'s tools is out of date: ask the user to refresh this server\'s tools in their client, or to remove the server and add it again.';
 
     expect(read.isError).toBe(true);
-    expect(textOf(read as any)).toBe('Error: There is no tool "get_templates": it is an operation. Run it with read_operation, with the arguments describe_operation shows for it. If read_operation is not one of your tools, your list of this server\'s tools is out of date: ask the user to refresh this app\'s tools in their client, or to remove the app and add it again.');
-    expect(textOf(call as any)).toBe('Error: There is no tool "delete_template": it is an operation. Run it with delete_operation, with the arguments describe_operation shows for it. If delete_operation is not one of your tools, your list of this server\'s tools is out of date: ask the user to refresh this app\'s tools in their client, or to remove the app and add it again.');
+    expect(textOf(read as any)).toBe(`Error: There is no tool "get_templates": it is an operation. Run it with read_operation, with the arguments describe_operation shows for it.${staleList}`);
+    expect(textOf(call as any)).toBe(`Error: There is no tool "delete_template": it is an operation. Run it with delete_operation, with the arguments describe_operation shows for it.${staleList}`);
+    expect(textOf(builder as any)).toBe(`Error: There is no tool "run_builder_tool": it is an operation. Run it with call_operation, or read_operation for a call that only reads, with the arguments describe_operation shows for it.${staleList}`);
     expect(mockAxios).not.toHaveBeenCalled();
   });
 

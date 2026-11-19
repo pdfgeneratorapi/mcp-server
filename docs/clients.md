@@ -6,7 +6,7 @@ Run `npm run smoke` (see [the smoke test](#smoke-test)) to check a deployment's 
 
 ## Results
 
-Last tested 2026-10-21.
+Last tested 2026-10-21. Observations made after that are dated where they appear below.
 
 | Client (version) | Registration | Sends `resource` | Protocol | Tool calls | Silent refresh |
 |---|---|---|---|---|---|

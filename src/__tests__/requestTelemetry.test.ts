@@ -285,6 +285,19 @@ describe('request telemetry', () => {
     })]);
   });
 
+  it('tells an operation called as a tool apart from a tool that does not exist', async () => {
+    const token = 'user-7.client-1.templates~read';
+    const { url, sessionId } = await connect(token);
+
+    await callTool(url, token, sessionId, 'get_templates', {});
+    await callTool(url, token, sessionId, 'acme_payroll_export', {});
+
+    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([
+      expect.objectContaining({ tool: 'get_templates', outcome: 'refused', refusal: 'operation_as_tool' }),
+      expect.objectContaining({ tool: 'acme_payroll_export', outcome: 'refused', refusal: 'unknown_tool' }),
+    ]);
+  });
+
   it('names the operation of a run with its arguments beside the ID, and none of their values', async () => {
     const token = 'user-7.client-1.templates~read';
     const search = 'Quarterly invoice for a customer';
