@@ -31,8 +31,16 @@ The authorization server refuses a request without a known `resource`.
 When a tool call needs a permission the connection lacks, the server answers `403 insufficient_scope` with a `scope` that lists what the connection already has plus the missing permission.
 
 - **VS Code** re-authorizes on its own: it opens the consent page asking for exactly the scopes in the challenge, so the connection keeps the permissions it had, and retries the call after you allow it.
+- **claude.ai** (2026-11-18) shows **Allow additional access to continue** with **Reconnect**. Reconnecting asks for every scope the server supports, not only those in the challenge, so the consent page opens with every permission selected and you choose them again.
 
 Not yet recorded for the other clients.
+
+### Tool approvals
+
+`read_operation` is hinted read-only, `call_operation` as a change that destroys nothing, and `delete_operation` as destructive. Whether a client asks before running one is up to the client.
+
+- **ChatGPT**, tested through Codex (2026-11-19): asks before every `call_operation` and `delete_operation`, showing the operation's ID and arguments, with **Allow once**, **Always allow** and **Deny**. It runs `read_operation` without asking.
+- **claude.ai** (2026-11-18), with **Auto** selected in the chat, ran `delete_operation` without asking.
 
 ### Ended connections
 
@@ -47,6 +55,10 @@ The server keeps the API credential of a connection for a few minutes. If it sti
 **VS Code**: the server is configured in VS Code's own `mcp.json` under `"servers"` (**MCP: Add Server**, or **MCP: Open User Configuration**), not in `~/.copilot/mcp-config.json`, which belongs to the Copilot CLI. Its tools are used from Copilot Chat in **Agent** mode, which needs a signed-in GitHub Copilot account; start the server from `mcp.json` or **MCP: List Servers** to sign in. If a sign-in is left unfinished (the consent page denied, or its prompt closed), VS Code stops asking for that server: run **Developer: Reload Window** and start the server again.
 
 **ChatGPT**: a chat started before the connector was added or reinstalled cannot use it; attach the connector to the chat or start a new one.
+
+ChatGPT keeps the tool list it fetched earlier, and Codex uses the same list for the app. When the server's tools change, as they did in 6.0.0, the model keeps calling the old tools and every call is refused, until the app's tools are refreshed in ChatGPT's app settings, or the app is removed and added again. The refusal asks the model to tell the user so.
+
+Codex runs several tool calls at once. Some are then refused by the API, with `429` (it takes 2 requests a second) or `409` (a template takes one builder step at a time), and Codex runs them again.
 
 **Any client**: if a client keeps a refresh token whose connection has ended, its refresh fails and some clients report a generic error instead of signing in again. Remove the server from the client and add it again.
 

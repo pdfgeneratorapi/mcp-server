@@ -150,14 +150,20 @@ export function notGrantedMessage(operationId: string, scope: string | null): st
 
 /**
  * What a call to a tool the server does not have hears. An operation's name was its own tool
- * before the meta-tools, so a client that still calls it learns how to run it now.
+ * before the meta-tools, so a client that still calls it learns how to run it now. A client that
+ * keeps the tool list it fetched earlier, as a ChatGPT app does until it is refreshed, has no run
+ * tool to call, so its model is told to ask the user to refresh the app.
  */
 export function unknownToolMessage(toolName: string): string {
   const operation = operations.get(toolName);
 
-  return operation
-    ? `There is no tool "${toolName}": it is an operation. Run it with ${runToolOf(operation)}, with the arguments ${DESCRIBE_OPERATION} shows for it.`
-    : `Unknown tool requested: ${toolName}. Find what you need with ${SEARCH_OPERATIONS}.`;
+  if (!operation) {
+    return `Unknown tool requested: ${toolName}. Find what you need with ${SEARCH_OPERATIONS}.`;
+  }
+
+  const runTool = runToolOf(operation);
+
+  return `There is no tool "${toolName}": it is an operation. Run it with ${runTool}, with the arguments ${DESCRIBE_OPERATION} shows for it. If ${runTool} is not one of your tools, your list of this server's tools is out of date: ask the user to refresh this app's tools in their client, or to remove the app and add it again.`;
 }
 
 /** The most each run tool runs: any operation at that level or below. */

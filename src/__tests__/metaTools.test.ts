@@ -523,15 +523,15 @@ describe('the server', () => {
     expect(mockAxios).not.toHaveBeenCalled();
   });
 
-  it('tells a client calling an operation as a tool how to run it now', async () => {
+  it('tells a client calling an operation as a tool how to run it now, or to have its tool list refreshed', async () => {
     const client = await connectedClient();
 
     const read = await client.callTool({ name: 'get_templates', arguments: {} });
     const call = await client.callTool({ name: 'delete_template', arguments: { templateId: 7 } });
 
     expect(read.isError).toBe(true);
-    expect(textOf(read as any)).toBe('Error: There is no tool "get_templates": it is an operation. Run it with read_operation, with the arguments describe_operation shows for it.');
-    expect(textOf(call as any)).toBe('Error: There is no tool "delete_template": it is an operation. Run it with delete_operation, with the arguments describe_operation shows for it.');
+    expect(textOf(read as any)).toBe('Error: There is no tool "get_templates": it is an operation. Run it with read_operation, with the arguments describe_operation shows for it. If read_operation is not one of your tools, your list of this server\'s tools is out of date: ask the user to refresh this app\'s tools in their client, or to remove the app and add it again.');
+    expect(textOf(call as any)).toBe('Error: There is no tool "delete_template": it is an operation. Run it with delete_operation, with the arguments describe_operation shows for it. If delete_operation is not one of your tools, your list of this server\'s tools is out of date: ask the user to refresh this app\'s tools in their client, or to remove the app and add it again.');
     expect(mockAxios).not.toHaveBeenCalled();
   });
 

@@ -6,6 +6,7 @@
 
 - The operations are no longer tools of their own. `tools/list` lists five tools, about 4.4 KB of definitions instead of about 89 KB: `search_operations` finds the operations for a task, `describe_operation` returns what they take, `read_operation` runs an operation that only reads, `call_operation` one that creates or changes something, and `delete_operation` one that deletes something. The template builder (`get_builder_guide`, `list_builder_tools`, `run_builder_tool`) and the page previews (`preview_template`, `show_pdf_pages`) are operations too. Each operation takes the same arguments and returns the same result as its tool did.
 - A call to an operation's old tool name, such as `get_templates`, is refused with an error that names the tool to run it with.
+- A client that keeps the tool list it fetched before the upgrade, as a ChatGPT app does, has none of the five tools, so every call it makes is refused: refresh the app's tools in the client, or remove the app and add it again. The refusal asks the model to tell the user so. See [docs/clients.md](docs/clients.md#client-notes).
 
 ### Added
 
