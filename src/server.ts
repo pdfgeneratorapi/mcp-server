@@ -22,7 +22,7 @@ import {
     resolveRun,
     notGrantedMessage,
     searchOperationsResult,
-    unknownToolMessage,
+    unknownTool,
 } from './metaTools.js';
 import { executeApiTool } from './execute.js';
 import { isEndedGrant, UpstreamCredentialError, type UpstreamCredentials } from './credentials/upstream.js';
@@ -132,9 +132,10 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         }
 
         if (!isRunTool(toolName)) {
+            const unknown = unknownTool(toolName);
             log.warn(`Unknown tool requested: ${toolName}`);
-            observe({ outcome: 'refused', refusal: 'unknown_tool' });
-            return { content: [{ type: "text", text: `Error: ${unknownToolMessage(toolName)}` }], isError: true };
+            observe({ outcome: 'refused', refusal: unknown.refusal });
+            return { content: [{ type: "text", text: `Error: ${unknown.message}` }], isError: true };
         }
 
         const run = resolveRun(toolName, toolArgs ?? {});

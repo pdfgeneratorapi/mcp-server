@@ -148,16 +148,32 @@ export function notGrantedMessage(operationId: string, scope: string | null): st
   return `This connection is not allowed to run "${operationId}". It needs the "${scope}" permission; reconnect and grant it.`;
 }
 
+/** The tools a client with an up-to-date tool list has, as tools/list lists them: "a, b and c". */
+const LISTED_TOOLS = listed([...metaTools.keys()]);
+
+/** Why a call to a tool the server does not have is refused, and what the client hears. */
+export interface UnknownTool {
+  refusal: 'operation_as_tool' | 'unknown_tool';
+  message: string;
+}
+
 /**
- * What a call to a tool the server does not have hears. An operation's name was its own tool
- * before the meta-tools, so a client that still calls it learns how to run it now.
+ * A call to a tool the server does not have. An operation's name was its own tool before the
+ * meta-tools. Most clients that still call one keep the tool list they fetched earlier, as a ChatGPT
+ * app does until it is refreshed, and have none of the meta-tools to call, so the refusal first
+ * tells such a model to ask the user to refresh the server's tools, and then says how to run it.
  */
-export function unknownToolMessage(toolName: string): string {
+export function unknownTool(toolName: string): UnknownTool {
   const operation = operations.get(toolName);
 
-  return operation
-    ? `There is no tool "${toolName}": it is an operation. Run it with ${runToolOf(operation)}, with the arguments ${DESCRIBE_OPERATION} shows for it.`
-    : `Unknown tool requested: ${toolName}. Find what you need with ${SEARCH_OPERATIONS}.`;
+  if (!operation) {
+    return { refusal: 'unknown_tool', message: `Unknown tool requested: ${toolName}. Find what you need with ${SEARCH_OPERATIONS}.` };
+  }
+
+  return {
+    refusal: 'operation_as_tool',
+    message: `There is no tool "${toolName}": it is an operation. If ${LISTED_TOOLS} are not among your tools, your list of this server's tools is out of date: ask the user to refresh this server's tools in their client, or to remove the server and add it again. Otherwise, run it with ${runToolOf(operation)}, with the arguments ${DESCRIBE_OPERATION} shows for it.`,
+  };
 }
 
 /** The most each run tool runs: any operation at that level or below. */
