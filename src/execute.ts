@@ -85,7 +85,7 @@ export async function executeApiTool(
 
     // Apply parameters to the URL path, query, or headers
     definition.executionParameters.forEach((param) => {
-        const value = validatedArgs[param.name];
+        const value = validatedArgs[param.name] ?? (param.in === 'query' ? definition.queryDefaults?.[param.name] : undefined);
         if (typeof value !== 'undefined' && value !== null) {
             if (param.in === 'path') {
                 urlPath = urlPath.replace(`{${param.name}}`, encodeURIComponent(String(value)));
