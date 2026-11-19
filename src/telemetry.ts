@@ -53,7 +53,7 @@ export interface RequestFacts {
 
 export interface ToolCallRecord {
   tool: string;
-  /** The operation a read_operation or call_operation call ran. */
+  /** The operation a run tool call ran, or the operation a call named as if it were a tool. */
   operation?: string;
   builderTool?: string;
   outcome: 'ok' | 'error' | 'refused';

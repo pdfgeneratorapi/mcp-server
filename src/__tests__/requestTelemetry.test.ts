@@ -285,17 +285,17 @@ describe('request telemetry', () => {
     })]);
   });
 
-  it('tells an operation called as a tool apart from a tool that does not exist', async () => {
+  it('tells an operation called as a tool apart from a tool that does not exist, and names the operation', async () => {
     const token = 'user-7.client-1.templates~read';
     const { url, sessionId } = await connect(token);
 
     await callTool(url, token, sessionId, 'get_templates', {});
     await callTool(url, token, sessionId, 'acme_payroll_export', {});
 
-    expect(requestLines().filter(line => line.method === 'tools/call')).toEqual([
-      expect.objectContaining({ tool: 'get_templates', outcome: 'refused', refusal: 'operation_as_tool' }),
-      expect.objectContaining({ tool: 'acme_payroll_export', outcome: 'refused', refusal: 'unknown_tool' }),
-    ]);
+    const [asTool, unknown] = requestLines().filter(line => line.method === 'tools/call');
+    expect(asTool).toEqual(expect.objectContaining({ tool: 'get_templates', operation: 'get_templates', outcome: 'refused', refusal: 'operation_as_tool' }));
+    expect(unknown).toEqual(expect.objectContaining({ tool: 'acme_payroll_export', outcome: 'refused', refusal: 'unknown_tool' }));
+    expect(unknown).not.toHaveProperty('operation');
   });
 
   it('names the operation of a run with its arguments beside the ID, and none of their values', async () => {

@@ -148,23 +148,35 @@ export function notGrantedMessage(operationId: string, scope: string | null): st
   return `This connection is not allowed to run "${operationId}". It needs the "${scope}" permission; reconnect and grant it.`;
 }
 
-/** The meta-tools a client with an up-to-date tool list has, named in the order they are used. */
-const STALE_TOOL_LIST_CHECK = `${SEARCH_OPERATIONS}, ${DESCRIBE_OPERATION}, ${READ_OPERATION}, ${CALL_OPERATION} and ${DELETE_OPERATION}`;
+/** The tools a client with an up-to-date tool list has, as tools/list lists them: "a, b and c". */
+const LISTED_TOOLS = (names => `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`)([...metaTools.keys()]);
+
+/** Why a call to a tool the server does not have is refused, and what the client hears. */
+export interface UnknownTool {
+  refusal: 'operation_as_tool' | 'unknown_tool';
+  /** The operation the tool name is, when it is one. */
+  operation?: string;
+  message: string;
+}
 
 /**
- * What a call to a tool the server does not have hears. An operation's name was its own tool
- * before the meta-tools, so a client that still calls it learns how to run it now. A client that
- * keeps the tool list it fetched earlier, as a ChatGPT app does until it is refreshed, has none of
- * the meta-tools to call, so its model is told to ask the user to refresh the server's tools.
+ * A call to a tool the server does not have. An operation's name was its own tool before the
+ * meta-tools, so a client that still calls it learns how to run it now. A client that keeps the
+ * tool list it fetched earlier, as a ChatGPT app does until it is refreshed, has none of the
+ * meta-tools to call, so its model is told to ask the user to refresh the server's tools.
  */
-export function unknownToolMessage(toolName: string): string {
+export function unknownTool(toolName: string): UnknownTool {
   const operation = operations.get(toolName);
 
   if (!operation) {
-    return `Unknown tool requested: ${toolName}. Find what you need with ${SEARCH_OPERATIONS}.`;
+    return { refusal: 'unknown_tool', message: `Unknown tool requested: ${toolName}. Find what you need with ${SEARCH_OPERATIONS}.` };
   }
 
-  return `There is no tool "${toolName}": it is an operation. Run it with ${runToolOf(operation)}, with the arguments ${DESCRIBE_OPERATION} shows for it. If ${STALE_TOOL_LIST_CHECK} are not among your tools, your list of this server's tools is out of date: ask the user to refresh this server's tools in their client, or to remove the server and add it again.`;
+  return {
+    refusal: 'operation_as_tool',
+    operation: operation.id,
+    message: `There is no tool "${toolName}": it is an operation. Run it with ${runToolOf(operation)}, with the arguments ${DESCRIBE_OPERATION} shows for it. If ${LISTED_TOOLS} are not among your tools, your list of this server's tools is out of date: ask the user to refresh this server's tools in their client, or to remove the server and add it again.`,
+  };
 }
 
 /** The most each run tool runs: any operation at that level or below. */
