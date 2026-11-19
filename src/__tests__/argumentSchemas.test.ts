@@ -194,11 +194,11 @@ describe('tool argument schemas', () => {
     ['get_templates', { search: 'Invoice', order_by: 'name', order_direction: 'asc' }],
     ['get_workspaces', { search: 'demo', order_by: 'identifier', order_direction: 'asc', activated: 1 }],
     ['get_documents', { search: 'Invoice', format: 'pdf' }],
-  ])('sends the search, sort and filters of %s to the API, 10 records a page', async (tool, args) => {
+  ])('sends the search, sort and filters of %s to the API', async (tool, args) => {
     const result = await run(tool, args);
 
     expect(result.isError).toBeFalsy();
-    expect((mockAxios.mock.calls[0][0] as any).params).toEqual({ ...args, per_page: 10 });
+    expect((mockAxios.mock.calls[0][0] as any).params).toEqual(args);
   });
 
   it.each([

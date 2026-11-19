@@ -27,6 +27,4 @@ export interface McpToolDefinition {
     prepareRequestBody?: (body: JsonObject) => JsonObject;
     /** Whether one call only reads, for an operation whose arguments decide whether it changes anything. */
     readOnlyCall?: (args: JsonObject) => boolean;
-    /** Query parameters sent with the value given here when the call leaves them out. */
-    queryDefaults?: JsonObject;
 }
