@@ -159,9 +159,9 @@ export interface UnknownTool {
 
 /**
  * A call to a tool the server does not have. An operation's name was its own tool before the
- * meta-tools, so a client that still calls it learns how to run it now. A client that keeps the
- * tool list it fetched earlier, as a ChatGPT app does until it is refreshed, has none of the
- * meta-tools to call, so its model is told to ask the user to refresh the server's tools.
+ * meta-tools. Most clients that still call one keep the tool list they fetched earlier, as a ChatGPT
+ * app does until it is refreshed, and have none of the meta-tools to call, so the refusal first
+ * tells such a model to ask the user to refresh the server's tools, and then says how to run it.
  */
 export function unknownTool(toolName: string): UnknownTool {
   const operation = operations.get(toolName);
@@ -172,7 +172,7 @@ export function unknownTool(toolName: string): UnknownTool {
 
   return {
     refusal: 'operation_as_tool',
-    message: `There is no tool "${toolName}": it is an operation. Run it with ${runToolOf(operation)}, with the arguments ${DESCRIBE_OPERATION} shows for it. If ${LISTED_TOOLS} are not among your tools, your list of this server's tools is out of date: ask the user to refresh this server's tools in their client, or to remove the server and add it again.`,
+    message: `There is no tool "${toolName}": it is an operation. If ${LISTED_TOOLS} are not among your tools, your list of this server's tools is out of date: ask the user to refresh this server's tools in their client, or to remove the server and add it again. Otherwise, run it with ${runToolOf(operation)}, with the arguments ${DESCRIBE_OPERATION} shows for it.`,
   };
 }
 

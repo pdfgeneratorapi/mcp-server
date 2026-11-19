@@ -56,9 +56,9 @@ The server keeps the API credential of a connection for a few minutes. If it sti
 
 **ChatGPT**: a chat started before the connector was added or reinstalled cannot use it; attach the connector to the chat or start a new one.
 
-ChatGPT keeps the tool list it fetched earlier, and Codex uses the same list for the app. When the server's tools change, as they did in 6.0.0, the model keeps calling the old tools and every call is refused, until the app's tools are refreshed in ChatGPT's app settings, or the app is removed and added again. The refusal asks the model to tell the user so.
+ChatGPT keeps the tool list it fetched earlier, and Codex uses the same list for the app (2026-11-19). When the server's tools change, as they did in 6.0.0, the model keeps calling the old tools and every call is refused, until the app's tools are refreshed in ChatGPT's app settings, or the app is removed and added again. The refusal asks the model to tell the user so.
 
-Codex runs several tool calls at once. Some are then refused by the API, with `429` (it takes 2 requests a second) or `409` (a template takes one builder step at a time), and Codex runs them again.
+Codex runs several tool calls at once (2026-11-19). Some are then refused by the API, with `429` (it takes 2 requests a second) or `409` (a template takes one builder step at a time), and Codex runs them again.
 
 **Any client**: if a client keeps a refresh token whose connection has ended, its refresh fails and some clients report a generic error instead of signing in again. Remove the server from the client and add it again.
 

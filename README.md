@@ -111,7 +111,7 @@ The server speaks MCP protocol revision 2026-07-28, which needs no session, and 
 
 ## Upgrading from 5.x
 
-Version 6 lists five tools instead of one per operation. A client that called an operation as a tool, such as `get_templates`, now runs it with `read_operation`, with `call_operation` if it creates or changes something, or with `delete_operation` if it deletes something, after `describe_operation` shows its arguments. The operations take the same arguments and return the same results. The per-request log line names the operation a run ran in `operation`.
+Version 6 lists five tools instead of one per operation. A client that called an operation as a tool, such as `get_templates`, now runs it with `read_operation`, with `call_operation` if it creates or changes something, or with `delete_operation` if it deletes something, after `describe_operation` shows its arguments. The operations take the same arguments and return the same results. A client that keeps the tool list it fetched before the upgrade, as ChatGPT does for an app, has none of the five tools until this server's tools are refreshed in it (in ChatGPT, refresh the app), or the server is removed and added again; until then every call is refused with a message saying so. The per-request log line names a call's operation in `operation`, whether it ran or was refused; an operation called as a tool is logged with the refusal `operation_as_tool`.
 
 ## Upgrading from 4.x
 

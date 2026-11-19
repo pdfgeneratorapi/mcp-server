@@ -103,23 +103,26 @@ export function describeRequest(body: unknown): Pick<RequestFacts, 'method' | 't
 }
 
 /**
- * The operation a call names: the one a run tool runs, which is an argument, so only the ID of an
- * operation that exists is logged; or the tool name itself, when a client calls an operation as if
- * it were a tool.
+ * The operation a call names: the one a run tool runs, or the tool name itself, when a client calls
+ * an operation as if it were a tool.
  */
 export function operationOf(tool: string, args: unknown): string | undefined {
-  if (!isRunTool(tool)) {
-    return operations.has(tool) ? tool : undefined;
-  }
+  return isRunTool(tool) ? runOperationOf(tool, args) : operations.has(tool) ? tool : undefined;
+}
 
+/**
+ * The operation a run tool call runs. It is an argument, so only the ID of an operation that exists
+ * is logged. Undefined for any other tool.
+ */
+function runOperationOf(tool: string, args: unknown): string | undefined {
   const operation = (args as { id?: unknown } | null | undefined)?.id;
 
-  return typeof operation === 'string' && operations.has(operation) ? operation : undefined;
+  return isRunTool(tool) && typeof operation === 'string' && operations.has(operation) ? operation : undefined;
 }
 
 /** The builder tool a run_builder_tool call names, made directly or as an operation. */
 export function builderToolOf(tool: string, args: unknown): string | undefined {
-  const operation = isRunTool(tool) ? operationOf(tool, args) : undefined;
+  const operation = runOperationOf(tool, args);
   const [name, builderArgs] = operation === undefined
     ? [tool, args]
     : [operation, (args as { arguments?: unknown } | null | undefined)?.arguments];
