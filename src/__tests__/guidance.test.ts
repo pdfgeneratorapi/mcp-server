@@ -60,10 +60,10 @@ describe('the server instructions', () => {
     expect(instructions).toContain('Ask for a document as a link (output url or viewer) only when the user wants a link: a link stores the document for 30 days.');
   });
 
-  it('say how lists are paged and how fast the API may be called', async () => {
+  it('say how lists are paged and to run calls one after another', async () => {
     const instructions = (await connectedClient()).getInstructions() ?? '';
 
-    expect(instructions).toContain('A list returns at most 10 records a page: narrow it with its search and filters rather than reading every page, and read the pages one after another, because the API takes 2 requests a second.');
+    expect(instructions).toContain('A list returns at most 10 records a page: narrow it with its search and filters rather than reading every page. Run calls one after another, not at the same time: the API takes 2 requests a second, and a template takes one builder step at a time.');
   });
 });
 
