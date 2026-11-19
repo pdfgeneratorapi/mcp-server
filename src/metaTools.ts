@@ -149,13 +149,11 @@ export function notGrantedMessage(operationId: string, scope: string | null): st
 }
 
 /** The tools a client with an up-to-date tool list has, as tools/list lists them: "a, b and c". */
-const LISTED_TOOLS = (names => `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`)([...metaTools.keys()]);
+const LISTED_TOOLS = listed([...metaTools.keys()]);
 
 /** Why a call to a tool the server does not have is refused, and what the client hears. */
 export interface UnknownTool {
   refusal: 'operation_as_tool' | 'unknown_tool';
-  /** The operation the tool name is, when it is one. */
-  operation?: string;
   message: string;
 }
 
@@ -174,7 +172,6 @@ export function unknownTool(toolName: string): UnknownTool {
 
   return {
     refusal: 'operation_as_tool',
-    operation: operation.id,
     message: `There is no tool "${toolName}": it is an operation. Run it with ${runToolOf(operation)}, with the arguments ${DESCRIBE_OPERATION} shows for it. If ${LISTED_TOOLS} are not among your tools, your list of this server's tools is out of date: ask the user to refresh this server's tools in their client, or to remove the server and add it again.`,
   };
 }

@@ -116,6 +116,42 @@ function callTool(url: string, token: string, sessionId: string, name: string, a
   return post(url, token, sessionId, { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name, arguments: args } });
 }
 
+/** The tools/call log lines, once as many as expected are written: each is written as its request ends. */
+async function toolCallLines(count: number): Promise<Array<Record<string, any>>> {
+  const lines = () => requestLines().filter(line => line.method === 'tools/call');
+
+  for (let waited = 0; lines().length < count && waited < 1_000; waited += 10) {
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+
+  return lines();
+}
+
+/** A 2026-07-28 tool call: no session, the envelope in `_meta` and the standard headers. */
+async function callToolWithoutSession(url: string, token: string, name: string, args: object = {}) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { ...headers(token), 'MCP-Protocol-Version': '2026-07-28', 'Mcp-Method': 'tools/call', 'Mcp-Name': name },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name,
+        arguments: args,
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+          'io.modelcontextprotocol/clientInfo': CLIENT,
+          'io.modelcontextprotocol/clientCapabilities': {},
+        },
+      },
+    }),
+  });
+  await response.text();
+
+  return response;
+}
+
 describe('request telemetry', () => {
   it('logs who opened a session, with which client and protocol', async () => {
     await connect('user-7.client-1');
@@ -296,6 +332,19 @@ describe('request telemetry', () => {
     expect(asTool).toEqual(expect.objectContaining({ tool: 'get_templates', operation: 'get_templates', outcome: 'refused', refusal: 'operation_as_tool' }));
     expect(unknown).toEqual(expect.objectContaining({ tool: 'acme_payroll_export', outcome: 'refused', refusal: 'unknown_tool' }));
     expect(unknown).not.toHaveProperty('operation');
+  });
+
+  it('names the operation of an operation called as a tool without a session too', async () => {
+    const token = 'user-7.client-1.templates~write';
+    const url = await start();
+
+    await callToolWithoutSession(url, token, 'get_templates');
+    await callToolWithoutSession(url, token, 'run_builder_tool', { template_id: 1, tool: 'add_component' });
+
+    expect(await toolCallLines(2)).toEqual([
+      expect.objectContaining({ protocol_version: '2026-07-28', tool: 'get_templates', operation: 'get_templates', refusal: 'operation_as_tool' }),
+      expect.objectContaining({ tool: 'run_builder_tool', operation: 'run_builder_tool', builder_tool: 'add_component', refusal: 'operation_as_tool' }),
+    ]);
   });
 
   it('names the operation of a run with its arguments beside the ID, and none of their values', async () => {

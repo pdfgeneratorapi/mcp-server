@@ -117,7 +117,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         const { name: toolName, arguments: toolArgs } = request.params;
         const operation = operationOf(toolName, toolArgs);
         const builderTool = builderToolOf(toolName, toolArgs);
-        const observe = (details: Omit<ToolCallRecord, 'tool' | 'builderTool' | 'durationMs'>) =>
+        const observe = (details: Omit<ToolCallRecord, 'tool' | 'operation' | 'builderTool' | 'durationMs'>) =>
             onToolCall?.({ tool: toolName, operation, builderTool, durationMs: elapsedSince(startedAt), ...details }, extra);
         const enforcement = loadScopeEnforcement();
         const scopes = extra.authInfo?.scopes ?? [];
@@ -134,7 +134,7 @@ export function createMcpServer(credentials?: UpstreamCredentials, onToolCall?: 
         if (!isRunTool(toolName)) {
             const unknown = unknownTool(toolName);
             log.warn(`Unknown tool requested: ${toolName}`);
-            observe({ outcome: 'refused', refusal: unknown.refusal, operation: unknown.operation });
+            observe({ outcome: 'refused', refusal: unknown.refusal });
             return { content: [{ type: "text", text: `Error: ${unknown.message}` }], isError: true };
         }
 

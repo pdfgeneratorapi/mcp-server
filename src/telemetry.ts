@@ -53,7 +53,7 @@ export interface RequestFacts {
 
 export interface ToolCallRecord {
   tool: string;
-  /** The operation a run tool call ran, or the operation a call named as if it were a tool. */
+  /** The operation the call named, as operationOf finds it. */
   operation?: string;
   builderTool?: string;
   outcome: 'ok' | 'error' | 'refused';
@@ -103,20 +103,23 @@ export function describeRequest(body: unknown): Pick<RequestFacts, 'method' | 't
 }
 
 /**
- * The operation a read_operation or call_operation call names. It is an argument, so only the ID
- * of an operation that exists is logged.
+ * The operation a call names: the one a run tool runs, which is an argument, so only the ID of an
+ * operation that exists is logged; or the tool name itself, when a client calls an operation as if
+ * it were a tool.
  */
 export function operationOf(tool: string, args: unknown): string | undefined {
+  if (!isRunTool(tool)) {
+    return operations.has(tool) ? tool : undefined;
+  }
+
   const operation = (args as { id?: unknown } | null | undefined)?.id;
 
-  return isRunTool(tool) && typeof operation === 'string' && operations.has(operation)
-    ? operation
-    : undefined;
+  return typeof operation === 'string' && operations.has(operation) ? operation : undefined;
 }
 
 /** The builder tool a run_builder_tool call names, made directly or as an operation. */
 export function builderToolOf(tool: string, args: unknown): string | undefined {
-  const operation = operationOf(tool, args);
+  const operation = isRunTool(tool) ? operationOf(tool, args) : undefined;
   const [name, builderArgs] = operation === undefined
     ? [tool, args]
     : [operation, (args as { arguments?: unknown } | null | undefined)?.arguments];
