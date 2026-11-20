@@ -185,10 +185,18 @@ describe('the e-invoice operations', () => {
   const forClient = (text: string) => text
     .replaceAll('Use the Get schema endpoint to see', 'Use `get_einvoice_schema` to see')
     .replaceAll('list in the Get schema endpoint', 'list of `get_einvoice_schema`');
-  const creditNoteRules = (spec.tags.find((tag: { name: string }) => tag.name === 'eInvoices').description as string)
+  const creditNotes = (spec.tags.find((tag: { name: string }) => tag.name === 'eInvoices').description as string).trim();
+  const creditNoteRules = creditNotes
     .split('\n')
     .filter((line) => line.startsWith('* '))
     .map(forClient);
+  const [, creditNoteIntro, , creditNoteOutput] = creditNotes.split('\n\n').map((paragraph) => paragraph.trim());
+  /** Each operation keeps the part of the spec's output paragraph that applies to what it produces. */
+  const ownOutput: Record<string, string> = {
+    create_einvoice: creditNoteOutput,
+    create_xrechnung_einvoice: creditNoteOutput.replace('CII output, including Factur-X, carries', 'CII output carries'),
+    create_facturx_einvoice: `Factur-X ${creditNoteOutput.slice(creditNoteOutput.indexOf('carries the code in'))}`,
+  };
   const operations = [
     ['create_einvoice', '/einvoice'],
     ['create_xrechnung_einvoice', '/einvoice/xrechnung'],
@@ -213,8 +221,15 @@ describe('the e-invoice operations', () => {
     }
   });
 
+  it.each(operations)('%s says what a credit note becomes in its output, in the spec\'s words', (tool) => {
+    const description = toolDefinitionMap.get(tool)!.description;
+
+    expect(description).toContain(forClient(creditNoteIntro));
+    expect(description).toContain(forClient(ownOutput[tool]));
+  });
+
   it.each(operations)('%s describes its own data as the spec does', (tool, path) => {
-    const specData = dataOf(spec.paths[path].post.requestBody.content['application/json'].schema);
+    const specData = dataOf(dereference(spec.paths[path].post.requestBody.content['application/json'].schema));
 
     expect(dataOf(toolDefinitionMap.get(tool)!.inputSchema)!.description).toBe(forClient(specData!.description!));
   });
