@@ -10,6 +10,7 @@ import type { McpToolDefinition } from '../types.js';
 const mockJsonSchemaToZod = jest.fn<() => string>();
 jest.unstable_mockModule('json-schema-to-zod', () => ({
   jsonSchemaToZod: mockJsonSchemaToZod,
+  parseString: () => 'z.string()',
 }));
 
 // Mock axios

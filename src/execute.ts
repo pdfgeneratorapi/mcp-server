@@ -1,5 +1,5 @@
 import { z, ZodError } from 'zod';
-import { jsonSchemaToZod } from 'json-schema-to-zod';
+import { jsonSchemaToZod, parseString, type ParserOverride } from 'json-schema-to-zod';
 import axios, { type AxiosRequestConfig, type AxiosError } from 'axios';
 import type { CallToolResult, ImageContent } from '@modelcontextprotocol/server';
 import type { McpToolDefinition, JsonObject } from './types.js';
@@ -387,13 +387,6 @@ function formatApiError(error: AxiosError): string {
 }
 
 /**
- * Converts a JSON Schema to a Zod schema for runtime validation
- * 
- * @param jsonSchema JSON Schema
- * @param toolName Tool name for error reporting
- * @returns Zod schema
- */
-/**
  * json-schema-to-zod writes uniqueItems as `.unique()`, a method zod 3 arrays do not have, so the
  * schema failed to build and the tool accepted anything. Arrays get that method here: a list whose
  * items are not all different is refused, as the API refuses it.
@@ -407,15 +400,59 @@ if (typeof (z.ZodArray.prototype as any).unique !== 'function') {
     };
 }
 
+/**
+ * The keywords a length-limited string may carry for lengthInCharacters to check it; a string with
+ * any other is left to the library, which knows what the keyword wraps or transforms.
+ */
+const PLAIN_STRING_KEYWORDS = new Set(['type', 'description', 'title', 'minLength', 'maxLength', 'format', 'pattern', 'example', 'examples', 'default', 'deprecated', 'nullable']);
+
+/** A string's length as the API counts it, in code points. */
+export function lengthOf(value: string): number {
+    return [...value].length;
+}
+
+/**
+ * json-schema-to-zod writes minLength and maxLength as zod's `.min()` and `.max()`, which count
+ * UTF-16 code units, so a name of emoji was refused at half its limit. The API counts code points,
+ * and so does this check, through lengthOf, with zod's own issue codes and messages. It counts the
+ * value as sent, as the format and pattern checks see it: the API trims a string first, so a value
+ * padded with whitespace past its limit is refused here. A plain string only: one with another
+ * keyword or a length that is not a whole number is left to the library, and a nullable one comes
+ * back here without its nullable.
+ */
+const lengthInCharacters: ParserOverride = (schema) => {
+    const { minLength, maxLength, ...rest } = schema;
+
+    if (schema.type !== 'string' || (minLength === undefined && maxLength === undefined)
+        || [minLength, maxLength].some((length) => length !== undefined && !Number.isInteger(length))
+        || schema.nullable === true || Object.keys(schema).some((keyword) => !PLAIN_STRING_KEYWORDS.has(keyword))) {
+        return undefined;
+    }
+
+    const checks = [
+        minLength === undefined ? '' : `if (length < ${minLength}) context.addIssue({ code: 'too_small', minimum: ${minLength}, type: 'string', inclusive: true, exact: false, message: 'String must contain at least ${minLength} character(s)' });`,
+        maxLength === undefined ? '' : `if (length > ${maxLength}) context.addIssue({ code: 'too_big', maximum: ${maxLength}, type: 'string', inclusive: true, exact: false, message: 'String must contain at most ${maxLength} character(s)' });`,
+    ].join(' ');
+
+    return `${parseString({ ...rest, type: 'string' })}.superRefine((value, context) => { const length = lengthOf(value); ${checks} })`;
+};
+
+/**
+ * Converts a JSON Schema to a Zod schema for runtime validation
+ * 
+ * @param jsonSchema JSON Schema
+ * @param toolName Tool name for error reporting
+ * @returns Zod schema
+ */
 function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTypeAny {
     if (typeof jsonSchema !== 'object' || jsonSchema === null) { 
         return z.object({}).passthrough(); 
     }
     try {
-        const zodSchemaString = jsonSchemaToZod(withoutDefaults(allowUnnamedProperties(oneOfAsAnyOf(jsonSchema))));
-        // Use Function constructor instead of eval() to restrict scope.
-        // Only `z` (zod) is available — no access to process, require, globals, etc.
-        const zodSchema = new Function('z', `"use strict"; return (${zodSchemaString});`)(z);
+        const zodSchemaString = jsonSchemaToZod(withoutDefaults(allowUnnamedProperties(oneOfAsAnyOf(jsonSchema))), { parserOverride: lengthInCharacters });
+        // Function rather than eval(), so the code sees no local scope: z and lengthOf are passed in.
+        // It still runs in global scope, so the schema text must come from the catalogue, never a caller.
+        const zodSchema = new Function('z', 'lengthOf', `"use strict"; return (${zodSchemaString});`)(z, lengthOf);
         if (typeof zodSchema?.parse !== 'function') {
             throw new Error('Function did not produce a valid Zod schema.');
         }
