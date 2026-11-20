@@ -450,8 +450,8 @@ function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTyp
     }
     try {
         const zodSchemaString = jsonSchemaToZod(withoutDefaults(allowUnnamedProperties(oneOfAsAnyOf(jsonSchema))), { parserOverride: lengthInCharacters });
-        // Use Function constructor instead of eval() to restrict scope.
-        // Only `z` (zod) and lengthOf are available — no access to process, require, globals, etc.
+        // Function rather than eval(), so the code sees no local scope: z and lengthOf are passed in.
+        // It still runs in global scope, so the schema text must come from the catalogue, never a caller.
         const zodSchema = new Function('z', 'lengthOf', `"use strict"; return (${zodSchemaString});`)(z, lengthOf);
         if (typeof zodSchema?.parse !== 'function') {
             throw new Error('Function did not produce a valid Zod schema.');

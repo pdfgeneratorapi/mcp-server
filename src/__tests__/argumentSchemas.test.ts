@@ -444,7 +444,10 @@ describe('string lengths', () => {
     expect(mockAxios).not.toHaveBeenCalled();
   });
 
-  it.each([[EMOJI.repeat(255)], [null]])('takes a nullable field of up to its limit in characters, or null', async (value) => {
+  it.each([
+    ['255 characters', EMOJI.repeat(255)],
+    ['null', null],
+  ])('takes a nullable field of up to its limit in characters, or null: %s', async (_label, value) => {
     const result = await run('create_form', form(value));
 
     expect(result.isError).toBeFalsy();
