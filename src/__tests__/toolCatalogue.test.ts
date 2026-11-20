@@ -58,6 +58,10 @@ function limits(schema: any): Record<string, unknown> {
     pattern: schema.pattern,
     minItems: schema.minItems,
     maxItems: schema.maxItems,
+    uniqueItems: schema.uniqueItems,
+    minProperties: schema.minProperties,
+    maxProperties: schema.maxProperties,
+    multipleOf: schema.multipleOf,
     format: schema.format,
   };
 }
