@@ -183,8 +183,8 @@ describe('tool input schemas', () => {
 /** The e-invoice operations carry text the spec keeps elsewhere or words for its docs, named here for an MCP client. */
 describe('the e-invoice operations', () => {
   const forClient = (text: string) => text
-    .replace('Use the Get schema endpoint to see', 'Use `get_einvoice_schema` to see')
-    .replace('list in the Get schema endpoint', 'list of `get_einvoice_schema`');
+    .replaceAll('Use the Get schema endpoint to see', 'Use `get_einvoice_schema` to see')
+    .replaceAll('list in the Get schema endpoint', 'list of `get_einvoice_schema`');
   const creditNoteRules = (spec.tags.find((tag: { name: string }) => tag.name === 'eInvoices').description as string)
     .split('\n')
     .filter((line) => line.startsWith('* '))
