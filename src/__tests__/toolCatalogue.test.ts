@@ -42,7 +42,27 @@ function fields(schema: any, prefix = ''): Set<string> {
 }
 
 /**
- * What each body field accepts, by path: its types, its values and the fields it requires. A
+ * A field's limits. OpenAPI 3.0 makes a bound exclusive with a boolean beside minimum or maximum;
+ * the tools give JSON Schema's number instead, which clients require, and both read the same here.
+ */
+function limits(schema: any): Record<string, unknown> {
+  const bound = (value: unknown, exclusive: unknown) =>
+    typeof exclusive === 'number' ? { value: exclusive, exclusive: true }
+      : value === undefined ? undefined : { value, exclusive: exclusive === true };
+  return {
+    minimum: bound(schema.minimum, schema.exclusiveMinimum),
+    maximum: bound(schema.maximum, schema.exclusiveMaximum),
+    minLength: schema.minLength,
+    maxLength: schema.maxLength,
+    pattern: schema.pattern,
+    minItems: schema.minItems,
+    maxItems: schema.maxItems,
+    format: schema.format,
+  };
+}
+
+/**
+ * What each body field accepts, by path: its types, its values, its limits and the fields it requires. A
  * field a union gives more than one shape keeps them all. The tools write OpenAPI's nullable as
  * a "null" type, and were generated with integer written as number: to a client both are a JSON
  * number, and the API turns down a fraction where it wants a whole one.
@@ -59,6 +79,7 @@ function shapes(schema: any, prefix = '', found = new Map<string, Set<string>>()
     types,
     enum: schema.enum ? schema.enum.map(String).sort() : undefined,
     required: schema.required ? [...schema.required].sort() : undefined,
+    ...limits(schema),
   });
   found.set(prefix, (found.get(prefix) ?? new Set()).add(shape));
   for (const [name, property] of Object.entries(schema.properties ?? {})) {
@@ -71,9 +92,42 @@ function shapes(schema: any, prefix = '', found = new Map<string, Set<string>>()
 /** Body fields whose tool and spec still differ, by tool and field, and how. None do now. */
 const KNOWN_DRIFT: Record<string, string> = {};
 
+/**
+ * The spec's words for a client of this server: it names the operation that returns a schema,
+ * where the spec names the endpoint.
+ */
+function clientWording(text: string, path: string): string {
+  const schemaOperation = path.startsWith('/einvoice') ? '`get_einvoice_schema`' : '`get_template_schema`';
+  return text
+    .replaceAll('Use the Get schema endpoint to see', `Use ${schemaOperation} to see`)
+    .replaceAll('list in the Get schema endpoint', `list of ${schemaOperation}`)
+    .replaceAll('the template schema (Get schema endpoint)', 'get_template_schema');
+}
+
+/** Every description a schema gives, by property path, through unions, arrays and nested objects. */
+function descriptions(schema: any, prefix = '', found = new Map<string, string>()): Map<string, string> {
+  if (!schema || typeof schema !== 'object') return found;
+  if (typeof schema.description === 'string') found.set(prefix, schema.description);
+  for (const key of ['allOf', 'oneOf', 'anyOf']) {
+    (schema[key] ?? []).forEach((option: any, index: number) => descriptions(option, `${prefix}<${key}${index}>`, found));
+  }
+  for (const [name, property] of Object.entries(schema.properties ?? {})) {
+    descriptions(property, prefix ? `${prefix}.${name}` : name, found);
+  }
+  if (schema.items && typeof schema.items === 'object') descriptions(schema.items, `${prefix}[]`, found);
+  return found;
+}
+
+/** Fields whose tool says it in other words than the spec, by tool and field, and why. */
+const OWN_WORDING: Record<string, string> = {
+  'get_template_library_items ids': 'the tool takes the ids as a list, where the API takes them comma separated',
+};
+
 interface Operation {
   key: string;
+  path: string;
   parameters: string[];
+  parameterSchemas: Map<string, any>;
   body: Set<string>;
   schema: any;
 }
@@ -82,14 +136,17 @@ const operations: Operation[] = Object.entries(spec.paths).flatMap(([path, item]
   Object.entries(item)
     .filter(([method]) => METHODS.includes(method))
     .map(([method, operation]: [string, any]) => {
-      const parameters = [...(item.parameters ?? []), ...(operation.parameters ?? [])]
+      const declared = [...(item.parameters ?? []), ...(operation.parameters ?? [])]
         .map((parameter: any) => dereference(parameter))
-        .filter((parameter: any) => parameter.in === 'path' || parameter.in === 'query')
-        .map((parameter: any) => `${parameter.in}:${parameter.name}`)
-        .sort();
+        .filter((parameter: any) => parameter.in === 'path' || parameter.in === 'query');
+      const parameters = declared.map((parameter: any) => `${parameter.in}:${parameter.name}`).sort();
+      const parameterSchemas = new Map<string, any>(declared.map((parameter: any) => [
+        parameter.name,
+        { ...parameter.schema, ...(parameter.description ? { description: parameter.description } : {}) },
+      ]));
       const content = dereference(operation.requestBody)?.content ?? {};
       const schema = (Object.values(content)[0] as any)?.schema;
-      return { key: `${method.toUpperCase()} ${normalise(path)}`, parameters, body: fields(schema), schema };
+      return { key: `${method.toUpperCase()} ${normalise(path)}`, path, parameters, parameterSchemas, body: fields(schema), schema };
     }),
 );
 
@@ -147,12 +204,51 @@ describe('tool catalogue', () => {
     });
   });
 
-  it('gives every body field the types, values and required fields of its operation', () => {
+  it('gives every body field the types, values, limits and required fields of its operation', () => {
     expect(drift.filter(({ field }) => !(field in KNOWN_DRIFT)).map(({ field, detail }) => `${field}: ${detail}`)).toEqual([]);
   });
 
   it('lists as known drift only fields that still drift', () => {
     expect(Object.keys(KNOWN_DRIFT).filter((field) => !drift.some((drifted) => drifted.field === field))).toEqual([]);
+  });
+
+  it('gives every parameter the type, values and limits of its operation', () => {
+    const drifted = tools.flatMap(({ tool, key }) => {
+      const operation = operations.find((candidate) => candidate.key === key);
+      const shapeOf = (schema: any) => JSON.stringify([...shapes(schema)].map(([path, shape]) => [path, [...shape].sort()]));
+      return [...(operation?.parameterSchemas ?? [])].flatMap(([name, schema]) => {
+        const own = shapeOf(tool.inputSchema.properties?.[name]);
+        const theirs = shapeOf(schema);
+        return own === theirs ? [] : [`${tool.name} ${name}: ${own} != ${theirs}`];
+      });
+    });
+
+    expect(drifted).toEqual([]);
+  });
+
+  const wording = tools.flatMap(({ tool, key }) => {
+    const operation = operations.find((candidate) => candidate.key === key);
+    if (!operation) return [];
+    const theirs = new Map([
+      ...descriptions(operation.schema),
+      ...[...operation.parameterSchemas].flatMap(([name, schema]) => [...descriptions(schema, name)]),
+    ]);
+    const own = new Map([
+      ...descriptions(tool.inputSchema.properties?.requestBody),
+      ...[...operation.parameterSchemas.keys()].flatMap((name) => [...descriptions(tool.inputSchema.properties?.[name], name)]),
+    ]);
+    return [...theirs].flatMap(([field, text]) => {
+      const expected = clientWording(text, operation.path);
+      return own.get(field) === expected ? [] : [{ field: `${tool.name} ${field}`, detail: `${JSON.stringify(own.get(field))} != ${JSON.stringify(expected)}` }];
+    });
+  });
+
+  it('describes every field and parameter as the spec does, naming the schema operations for a client', () => {
+    expect(wording.filter(({ field }) => !(field in OWN_WORDING)).map(({ field, detail }) => `${field}: ${detail}`)).toEqual([]);
+  });
+
+  it('lists as its own wording only fields that still differ', () => {
+    expect(Object.keys(OWN_WORDING).filter((field) => !wording.some((differing) => differing.field === field))).toEqual([]);
   });
 });
 
@@ -182,9 +278,7 @@ describe('tool input schemas', () => {
 
 /** The e-invoice operations carry text the spec keeps elsewhere or words for its docs, named here for an MCP client. */
 describe('the e-invoice operations', () => {
-  const forClient = (text: string) => text
-    .replaceAll('Use the Get schema endpoint to see', 'Use `get_einvoice_schema` to see')
-    .replaceAll('list in the Get schema endpoint', 'list of `get_einvoice_schema`');
+  const forClient = (text: string) => clientWording(text, '/einvoice');
   const creditNoteRules = (spec.tags.find((tag: { name: string }) => tag.name === 'eInvoices').description as string)
     .split('\n')
     .filter((line) => line.startsWith('* '))
