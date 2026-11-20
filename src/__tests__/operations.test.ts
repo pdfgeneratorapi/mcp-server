@@ -152,7 +152,7 @@ describe('searchOperations', () => {
   });
 
   it('ignores case and punctuation', () => {
-    expect(ids(search('XRechnung!'))).toEqual(['create_xrechnung_einvoice']);
+    expect(ids(search('XRechnung!'))).toEqual(['create_xrechnung_einvoice', 'create_einvoice']);
   });
 
   it('leaves out results far below the best one', () => {

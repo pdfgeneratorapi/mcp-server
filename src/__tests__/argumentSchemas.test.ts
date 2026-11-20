@@ -244,6 +244,29 @@ describe('tool argument schemas', () => {
     expect((result.content[0] as { text: string }).text).not.toContain('requestBody.type');
   });
 
+  const generate = [
+    ['generate_document', { template: { id: 58057, data: {} } }],
+    ['generate_document_async', { template: { id: 58057, data: {} }, callback: { url: 'https://example.test/callback' } }],
+    ['generate_document_batch', { template: [{ id: 58057, data: {} }] }],
+    ['generate_document_batch_async', { template: [{ id: 58057, data: {} }], callback: { url: 'https://example.test/callback' } }],
+  ] as const;
+
+  it.each(generate)('sends %s how a PDF viewer opens the document', async (tool, requestBody) => {
+    const display_mode = { layout: 'TwoColumnLeft', mode: 'UseThumbs', zoom: 'real' };
+
+    const result = await run(tool, { requestBody: { ...requestBody, display_mode } });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data.display_mode).toEqual(display_mode);
+  });
+
+  it.each(generate)('refuses a page layout a PDF viewer does not have for %s before it reaches the API', async (tool, requestBody) => {
+    const result = await run(tool, { requestBody: { ...requestBody, display_mode: { layout: 'ThreeColumns' } } });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['a template name longer than 120 characters', 'create_template', { name: 'x'.repeat(121) }],
     ['a callback URL that is not https', 'generate_document_async', {
