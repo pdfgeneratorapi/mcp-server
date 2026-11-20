@@ -69,7 +69,7 @@ export async function executeApiTool(
         validatedArgs = zodSchema.parse(argsToParse);
     } catch (error: unknown) {
         if (error instanceof ZodError) {
-            const validationErrorMessage = `Invalid arguments for tool '${toolName}': ${error.errors.map(e => `${e.path.join('.')} (${e.code}): ${e.message}`).join(', ')}`;
+            const validationErrorMessage = `Invalid arguments for tool '${toolName}': ${describeIssues(error.issues).join(', ')}`;
             return { content: [{ type: 'text', text: validationErrorMessage }], isError: true };
         } else {
              const errorMessage = error instanceof Error ? error.message : String(error);
@@ -448,6 +448,34 @@ function withoutDefaults(schema: any, isPropertyMap = false): any {
             .filter(([key]) => isPropertyMap || key !== 'default')
             .map(([key, value]) => [key, withoutDefaults(value, !isPropertyMap && key === 'properties')]),
     );
+}
+
+/**
+ * Each issue as its path, its code and its message. A union's own issue says only "Invalid input";
+ * when exactly one of its options takes the value's type, that option's issues say what is wrong,
+ * such as the values an enum allows, so those are given instead. An option for another type adds
+ * nothing but the type mismatch; when every option is one, the types the union takes are named.
+ */
+function describeIssues(issues: z.ZodIssue[]): string[] {
+    return issues.flatMap((issue) => {
+        if (issue.code === 'invalid_union') {
+            const where = issue.path.join('.');
+            const options = issue.unionErrors.filter((option) =>
+                !option.issues.every((inner) => inner.code === 'invalid_type' && inner.path.join('.') === where));
+            if (options.length === 1) {
+                return describeIssues(options[0].issues);
+            }
+            if (options.length === 0) {
+                const mismatches = issue.unionErrors.flatMap((option) => option.issues.flatMap((inner) =>
+                    inner.code === 'invalid_type' ? [{ expected: inner.expected, received: inner.received }] : []));
+                const expected = [...new Set(mismatches.map((mismatch) => mismatch.expected))].join(' or ');
+
+                return [`${where} (invalid_type): Expected ${expected}, received ${mismatches[0]?.received}`];
+            }
+        }
+
+        return [`${issue.path.join('.')} (${issue.code}): ${issue.message}`];
+    });
 }
 
 /**

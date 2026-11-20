@@ -267,10 +267,23 @@ describe('tool argument schemas', () => {
     expect(mockAxios).not.toHaveBeenCalled();
   });
 
-  it('takes a null display mode, as the API does, the same as leaving it out', async () => {
-    const result = await run('generate_document', { requestBody: { template: { id: 58057, data: {} }, display_mode: null } });
+  it.each(generate)('sends %s a null display mode as null, as the API takes it', async (tool, requestBody) => {
+    const result = await run(tool, { requestBody: { ...requestBody, display_mode: null } });
 
     expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data.display_mode).toBeNull();
+  });
+
+  it.each([
+    [{ zoom: 'fit' }, 'requestBody.display_mode.zoom', "'fullpage' | 'fullwidth' | 'real' | 'default'"],
+    [{ layout: 'ThreeColumns' }, 'requestBody.display_mode.layout', "'SinglePage' | 'OneColumn' | 'TwoColumnLeft' | 'TwoColumnRight'"],
+    ['fullwidth', 'requestBody.display_mode', 'Expected object or null, received string'],
+  ])('names the field and what a PDF viewer takes when %j is not one of them', async (display_mode, field, allowed) => {
+    const result = await run('generate_document', { requestBody: { template: { id: 58057, data: {} }, display_mode } });
+
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain(field);
+    expect(text).toContain(allowed);
   });
 
   it.each([
