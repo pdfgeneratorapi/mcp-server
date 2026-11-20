@@ -32,13 +32,13 @@ const UNSCOPED_CATEGORIES: Record<string, OperationCategory> = {
   get_einvoice_schema: 'einvoice',
 };
 
+/** How a PDF viewer opens a generated document: the generate operations' display_mode. */
+const VIEWER_OPTIONS = ['zoom', 'thumbnails', 'bookmarks', 'fullscreen'];
+
 /**
  * Words people use for an operation that its ID, title and description don't carry, so a search
  * in the user's words still finds it.
  */
-/** How a PDF viewer opens a generated document: the generate operations' display_mode. */
-const VIEWER_OPTIONS = ['zoom', 'thumbnails', 'bookmarks', 'outline', 'fullscreen'];
-
 const KEYWORDS: Record<string, string[]> = {
   optimize_document: ['compress', 'shrink', 'reduce', 'smaller'],
   encrypt_document: ['password', 'protect', 'lock', 'secure'],
@@ -68,6 +68,14 @@ const KEYWORDS: Record<string, string[]> = {
   store_document: ['upload', 'save'],
   generate_viewer_url: ['view', 'link', 'share'],
   share_form: ['link', 'public', 'collect'],
+};
+
+/**
+ * Words an operation's description uses only to say what it does not do, left out of the search
+ * so they don't lead to it: Factur-X can't be previewed.
+ */
+const RULED_OUT: Record<string, string[]> = {
+  create_facturx_einvoice: ['preview', 'mode'],
 };
 
 const ID_WEIGHT = 3;
@@ -162,7 +170,10 @@ const index: Map<string, IndexedOperation> = new Map(
       { words: new Set(words(operation.id)), weight: ID_WEIGHT },
       { words: new Set(words(operation.title)), weight: TITLE_WEIGHT },
       { words: new Set(KEYWORDS[operation.id] ?? []), weight: KEYWORD_WEIGHT },
-      { words: new Set(words(operation.definition.description)), weight: DESCRIPTION_WEIGHT },
+      {
+        words: new Set(words(operation.definition.description).filter(word => !RULED_OUT[operation.id]?.includes(word))),
+        weight: DESCRIPTION_WEIGHT,
+      },
     ],
   }]),
 );

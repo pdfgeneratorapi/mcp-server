@@ -149,6 +149,14 @@ describe('searchOperations', () => {
     },
   );
 
+  it('keeps a text outline with the text operations, not with how a PDF viewer opens', () => {
+    expect(ids(search('outline'))[0]).toBe('measure_text');
+  });
+
+  it('finds no operation by what its description says it cannot do', () => {
+    expect(ids(search('preview'))).toEqual(['preview_template', 'show_pdf_pages']);
+  });
+
   it('ranks an operation matching every term above those matching some', () => {
     expect(ids(search('delete template')).slice(0, 2)).toEqual(['delete_template', 'delete_template_version']);
   });
