@@ -129,7 +129,6 @@ const descriptions = (schema: any, prefix = '') => annotations(schema, 'descript
 /** Fields whose tool says it in other words than the spec, by tool and field, and why. */
 const OWN_WORDING: Record<string, string> = {
   'get_template_library_items ids': 'the tool takes the ids as a list, where the API takes them comma separated',
-  'create_xrechnung_einvoice type': 'the spec says any value but CII produces UBL, where the enum takes only UBL or CII',
 };
 
 interface Operation {
@@ -138,6 +137,7 @@ interface Operation {
   parameters: string[];
   parameterSchemas: Map<string, any>;
   body: Set<string>;
+  bodyRequired: boolean;
   schema: any;
 }
 
@@ -153,9 +153,17 @@ const operations: Operation[] = Object.entries(spec.paths).flatMap(([path, item]
         parameter.name,
         { ...parameter.schema, ...(parameter.description ? { description: parameter.description } : {}) },
       ]));
-      const content = dereference(operation.requestBody)?.content ?? {};
-      const schema = (Object.values(content)[0] as any)?.schema;
-      return { key: `${method.toUpperCase()} ${normalise(path)}`, path, parameters, parameterSchemas, body: fields(schema), schema };
+      const requestBody = dereference(operation.requestBody);
+      const schema = (Object.values(requestBody?.content ?? {})[0] as any)?.schema;
+      return {
+        key: `${method.toUpperCase()} ${normalise(path)}`,
+        path,
+        parameters,
+        parameterSchemas,
+        body: fields(schema),
+        bodyRequired: requestBody?.required === true,
+        schema,
+      };
     }),
 );
 
@@ -197,6 +205,17 @@ describe('tool catalogue', () => {
       const missing = difference(operation.body, body);
       const extra = difference(body, operation.body);
       return missing.length || extra.length ? [`${tool.name}: missing ${JSON.stringify(missing)}, extra ${JSON.stringify(extra)}`] : [];
+    });
+
+    expect(drifted).toEqual([]);
+  });
+
+  it('requires the body wherever its operation does', () => {
+    const drifted = tools.flatMap(({ tool, key }) => {
+      const operation = operations.find((candidate) => candidate.key === key);
+      if (!operation?.schema) return [];
+      const required = ((tool.inputSchema as any).required ?? []).includes('requestBody');
+      return required === operation.bodyRequired ? [] : [`${tool.name}: body ${required ? 'required' : 'optional'}, spec ${operation.bodyRequired ? 'required' : 'optional'}`];
     });
 
     expect(drifted).toEqual([]);
@@ -273,11 +292,6 @@ describe('tool catalogue', () => {
   it('gives store_document no empty name to fill in, which the API refuses', () => {
     const name = (toolDefinitionMap.get('store_document')!.inputSchema as any).properties.requestBody.properties.name;
     expect(name).not.toHaveProperty('default');
-  });
-
-  it('says XRechnung takes UBL or CII, where the spec speaks of any other value', () => {
-    const type = (toolDefinitionMap.get('create_xrechnung_einvoice')!.inputSchema as any).properties.requestBody;
-    expect(JSON.stringify(type)).toContain('"description":"Syntax of the XRechnung invoice. `UBL`, the default, produces XRechnung UBL; `CII` produces XRechnung CII."');
   });
 
   it('shows a PDF operation a file URL rather than a placeholder in its example arguments', () => {
