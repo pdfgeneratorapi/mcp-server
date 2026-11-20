@@ -407,15 +407,21 @@ if (typeof (z.ZodArray.prototype as any).unique !== 'function') {
     };
 }
 
+/** Keywords json-schema-to-zod handles before a schema's type, which a string's own parser would drop. */
+const WRAPPING_KEYWORDS = ['nullable', 'enum', 'const', 'anyOf', 'allOf', 'oneOf', 'not', 'if'];
+
 /**
  * json-schema-to-zod writes minLength and maxLength as zod's `.min()` and `.max()`, which count
  * UTF-16 code units, so a name of emoji was refused at half its limit. JSON Schema and the API count
- * characters, and so does this check, with zod's own issue codes and messages.
+ * code points, and so does this check, with zod's own issue codes and messages. A string that also
+ * carries a wrapping keyword is left to the library, which parses it again without the keyword
+ * where it can, as for nullable.
  */
 const lengthInCharacters: ParserOverride = (schema) => {
     const { minLength, maxLength, ...rest } = schema;
 
-    if (schema.type !== 'string' || (minLength === undefined && maxLength === undefined)) {
+    if (schema.type !== 'string' || (minLength === undefined && maxLength === undefined)
+        || WRAPPING_KEYWORDS.some((keyword) => keyword in schema)) {
         return undefined;
     }
 

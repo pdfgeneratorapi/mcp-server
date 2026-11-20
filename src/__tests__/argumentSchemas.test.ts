@@ -459,6 +459,36 @@ describe('string lengths', () => {
     expect(mockAxios).not.toHaveBeenCalled();
   });
 
+  /** A tool whose one argument, code, has the schema given. */
+  const toolWith = (code: Record<string, unknown>) => ({
+    name: 'testTool',
+    description: 'test',
+    inputSchema: { type: 'object', properties: { code } },
+    method: 'get',
+    pathTemplate: '/test',
+    executionParameters: [],
+    requestBodyContentType: undefined,
+  });
+
+  it.each([
+    ['UBL', false],
+    ['XYZ', true],
+  ])('keeps the values an enum allows beside a length: %s refused is %s', async (code, refused) => {
+    const result = await executeApiTool('testTool', toolWith({ type: 'string', enum: ['UBL', 'CII'], maxLength: 3 }) as any, { code }, undefined);
+
+    expect(Boolean(result.isError)).toBe(refused);
+  });
+
+  it.each([
+    [null, false],
+    [EMOJI.repeat(2), false],
+    [EMOJI.repeat(3), true],
+  ])('keeps a nullable beside a length, counted in characters: %s refused is %s', async (code, refused) => {
+    const result = await executeApiTool('testTool', toolWith({ type: 'string', nullable: true, maxLength: 2 }) as any, { code }, undefined);
+
+    expect(Boolean(result.isError)).toBe(refused);
+  });
+
   it('refuses a value of another type before counting it', async () => {
     const result = await run('create_template', { requestBody: { name: 120 } });
 
