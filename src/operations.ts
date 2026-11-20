@@ -39,6 +39,17 @@ const UNSCOPED_CATEGORIES: Record<string, OperationCategory> = {
 const GENERATE_ARGUMENTS = ['display', 'zoom', 'thumbnails', 'bookmarks', 'fullscreen', 'testing'];
 
 /**
+ * Words for what an operation takes, rather than what it does. They weigh as little as its
+ * description, so an operation made for the job ranks above one that only takes it as an argument.
+ */
+const ARGUMENTS: Record<string, string[]> = {
+  generate_document: GENERATE_ARGUMENTS,
+  generate_document_async: GENERATE_ARGUMENTS,
+  generate_document_batch: GENERATE_ARGUMENTS,
+  generate_document_batch_async: GENERATE_ARGUMENTS,
+};
+
+/**
  * Words people use for an operation that its ID, title and description don't carry, so a search
  * in the user's words still finds it.
  */
@@ -47,7 +58,9 @@ const KEYWORDS: Record<string, string[]> = {
   encrypt_document: ['password', 'protect', 'lock', 'secure'],
   decrypt_document: ['password', 'unlock', 'remove'],
   make_accessible: ['ua', 'a11y', 'tagged'],
-  create_facturx_einvoice: ['zugferd'],
+  create_einvoice: ['credit'],
+  create_xrechnung_einvoice: ['credit'],
+  create_facturx_einvoice: ['zugferd', 'credit'],
   get_document_signatures: ['signed', 'verify'],
   promote_template_version: ['restore', 'revert', 'rollback', 'publish', 'live'],
   copy_template: ['duplicate', 'clone'],
@@ -57,13 +70,12 @@ const KEYWORDS: Record<string, string[]> = {
   delete_document: ['remove'],
   delete_workspace: ['remove'],
   delete_form: ['remove'],
-  generate_document: ['render', 'merge', 'create', ...GENERATE_ARGUMENTS],
-  generate_document_async: GENERATE_ARGUMENTS,
-  generate_document_batch: GENERATE_ARGUMENTS,
-  generate_document_batch_async: GENERATE_ARGUMENTS,
+  generate_document: ['render', 'merge', 'create'],
   get_template_data: ['placeholders', 'fields', 'sample'],
-  validate_template: ['check'],
+  validate_template: ['check', 'test'],
   open_editor: ['edit', 'design'],
+  preview_template: ['thumbnails', 'display'],
+  show_pdf_pages: ['thumbnails', 'display'],
   get_builder_guide: ['build', 'layout', 'design'],
   run_builder_tool: ['component', 'page', 'row', 'column', 'table', 'add', 'move', 'patch', 'remove', 'change', 'edit', 'modify', 'rename', 'restyle'],
   convert_url_to_pdf: ['website', 'webpage', 'web'],
@@ -85,6 +97,7 @@ const ID_WEIGHT = 3;
 const TITLE_WEIGHT = 3;
 const KEYWORD_WEIGHT = 2;
 const DESCRIPTION_WEIGHT = 1;
+const ARGUMENT_WEIGHT = 1;
 const PLURAL_MATCH = 0.9;
 const PARTIAL_MATCH = 0.7;
 const MIN_PARTIAL_LENGTH = 3;
@@ -124,6 +137,15 @@ export interface SearchResult {
   found: Operation[];
   /** How many operations matched in all. */
   total: number;
+}
+
+/**
+ * What an operation is, for the search: its description up to its first bold section. The
+ * sections, such as the e-invoice operations' credit notes, are instructions for describe_operation,
+ * and their words would lead searches about other things to it.
+ */
+function summaryOf(description: string): string {
+  return description.split('\n\n**')[0];
 }
 
 function words(text: string): string[] {
@@ -174,9 +196,10 @@ const index: Map<string, IndexedOperation> = new Map(
       { words: new Set(words(operation.title)), weight: TITLE_WEIGHT },
       { words: new Set(KEYWORDS[operation.id] ?? []), weight: KEYWORD_WEIGHT },
       {
-        words: new Set(words(operation.definition.description).filter(word => !RULED_OUT[operation.id]?.includes(word))),
+        words: new Set(words(summaryOf(operation.definition.description)).filter(word => !RULED_OUT[operation.id]?.includes(word))),
         weight: DESCRIPTION_WEIGHT,
       },
+      { words: new Set(ARGUMENTS[operation.id] ?? []), weight: ARGUMENT_WEIGHT },
     ],
   }]),
 );

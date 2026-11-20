@@ -142,12 +142,16 @@ describe('searchOperations', () => {
     expect(ids(search(query))).toEqual(expect.arrayContaining(['update_template', 'run_builder_tool']));
   });
 
-  it.each([['zoom'], ['initial zoom'], ['thumbnails'], ['bookmarks panel'], ['fullscreen']])(
+  it.each([['zoom'], ['initial zoom'], ['bookmarks panel'], ['fullscreen']])(
     'finds the generate operations, which say how a PDF viewer opens the document, for "%s"',
     (query) => {
       expect(ids(search(query))[0]).toBe('generate_document');
     },
   );
+
+  it('finds both the page images and the generate operations for "thumbnails", which can mean either', () => {
+    expect(ids(search('thumbnails'))).toEqual(expect.arrayContaining(['show_pdf_pages', 'preview_template', 'generate_document']));
+  });
 
   it('keeps a text outline with the text operations, not with how a PDF viewer opens', () => {
     expect(ids(search('outline'))[0]).toBe('measure_text');
@@ -165,7 +169,28 @@ describe('searchOperations', () => {
   });
 
   it('finds the generate operations for a free test document, which they make with testing', () => {
-    expect(ids(search('testing'))[0]).toBe('generate_document');
+    expect(ids(search('testing'))).toContain('generate_document');
+  });
+
+  it.each([
+    ['pdf thumbnails', 'show_pdf_pages'],
+    ['display pdf', 'show_pdf_pages'],
+    ['test template', 'validate_template'],
+  ])('ranks the operation made for "%s" above the generate operations, which only take it as an argument', (query, first) => {
+    expect(ids(search(query))[0]).toBe(first);
+  });
+
+  it.each([['list documents'], ['get document'], ['outline'], ['type']])(
+    'finds no e-invoice operation for "%s" through its credit-note instructions',
+    (query) => {
+      expect(ids(search(query)).filter((id) => id.includes('einvoice'))).toEqual([]);
+    },
+  );
+
+  it('finds the e-invoice operations for a credit note', () => {
+    expect(ids(search('credit note'))).toEqual(expect.arrayContaining([
+      'create_einvoice', 'create_xrechnung_einvoice', 'create_facturx_einvoice',
+    ]));
   });
 
   it('ranks an operation matching every term above those matching some', () => {
@@ -178,7 +203,7 @@ describe('searchOperations', () => {
   });
 
   it('ignores case and punctuation', () => {
-    expect(ids(search('XRechnung!'))).toEqual(['create_xrechnung_einvoice', 'create_einvoice']);
+    expect(ids(search('XRechnung!'))).toEqual(['create_xrechnung_einvoice']);
   });
 
   it('leaves out results far below the best one', () => {
