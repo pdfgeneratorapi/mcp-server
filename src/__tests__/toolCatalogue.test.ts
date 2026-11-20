@@ -270,6 +270,11 @@ describe('tool catalogue', () => {
     expect(differing).toEqual([]);
   });
 
+  it('gives store_document no empty name to fill in, which the API refuses', () => {
+    const name = (toolDefinitionMap.get('store_document')!.inputSchema as any).properties.requestBody.properties.name;
+    expect(name).not.toHaveProperty('default');
+  });
+
   it('says XRechnung takes UBL or CII, where the spec speaks of any other value', () => {
     const type = (toolDefinitionMap.get('create_xrechnung_einvoice')!.inputSchema as any).properties.requestBody;
     expect(JSON.stringify(type)).toContain('"description":"Syntax of the XRechnung invoice. `UBL`, the default, produces XRechnung UBL; `CII` produces XRechnung CII."');
