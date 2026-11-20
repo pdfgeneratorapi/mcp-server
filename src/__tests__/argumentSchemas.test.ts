@@ -267,6 +267,12 @@ describe('tool argument schemas', () => {
     expect(mockAxios).not.toHaveBeenCalled();
   });
 
+  it('takes a null display mode, as the API does, the same as leaving it out', async () => {
+    const result = await run('generate_document', { requestBody: { template: { id: 58057, data: {} }, display_mode: null } });
+
+    expect(result.isError).toBeFalsy();
+  });
+
   it.each([
     ['a zoom', { zoom: 'fit' }],
     ['an opening panel', { mode: 'UseAttachments' }],

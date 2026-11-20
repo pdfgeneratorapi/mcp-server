@@ -142,6 +142,13 @@ describe('searchOperations', () => {
     expect(ids(search(query))).toEqual(expect.arrayContaining(['update_template', 'run_builder_tool']));
   });
 
+  it.each([['zoom'], ['initial zoom'], ['thumbnails'], ['bookmarks panel'], ['fullscreen']])(
+    'finds the generate operations, which say how a PDF viewer opens the document, for "%s"',
+    (query) => {
+      expect(ids(search(query))[0]).toBe('generate_document');
+    },
+  );
+
   it('ranks an operation matching every term above those matching some', () => {
     expect(ids(search('delete template')).slice(0, 2)).toEqual(['delete_template', 'delete_template_version']);
   });

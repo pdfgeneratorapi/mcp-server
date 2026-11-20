@@ -36,6 +36,9 @@ const UNSCOPED_CATEGORIES: Record<string, OperationCategory> = {
  * Words people use for an operation that its ID, title and description don't carry, so a search
  * in the user's words still finds it.
  */
+/** How a PDF viewer opens a generated document: the generate operations' display_mode. */
+const VIEWER_OPTIONS = ['zoom', 'thumbnails', 'bookmarks', 'outline', 'fullscreen'];
+
 const KEYWORDS: Record<string, string[]> = {
   optimize_document: ['compress', 'shrink', 'reduce', 'smaller'],
   encrypt_document: ['password', 'protect', 'lock', 'secure'],
@@ -51,7 +54,10 @@ const KEYWORDS: Record<string, string[]> = {
   delete_document: ['remove'],
   delete_workspace: ['remove'],
   delete_form: ['remove'],
-  generate_document: ['render', 'merge', 'create'],
+  generate_document: ['render', 'merge', 'create', ...VIEWER_OPTIONS],
+  generate_document_async: VIEWER_OPTIONS,
+  generate_document_batch: VIEWER_OPTIONS,
+  generate_document_batch_async: VIEWER_OPTIONS,
   get_template_data: ['placeholders', 'fields', 'sample'],
   validate_template: ['check'],
   open_editor: ['edit', 'design'],
