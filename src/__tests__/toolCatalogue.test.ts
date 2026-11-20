@@ -129,6 +129,7 @@ const descriptions = (schema: any, prefix = '') => annotations(schema, 'descript
 /** Fields whose tool says it in other words than the spec, by tool and field, and why. */
 const OWN_WORDING: Record<string, string> = {
   'get_template_library_items ids': 'the tool takes the ids as a list, where the API takes them comma separated',
+  'create_xrechnung_einvoice type': 'the spec says any value but CII produces UBL, where the enum takes only UBL or CII',
 };
 
 interface Operation {
@@ -267,6 +268,11 @@ describe('tool catalogue', () => {
     });
 
     expect(differing).toEqual([]);
+  });
+
+  it('says XRechnung takes UBL or CII, where the spec speaks of any other value', () => {
+    const type = (toolDefinitionMap.get('create_xrechnung_einvoice')!.inputSchema as any).properties.requestBody;
+    expect(JSON.stringify(type)).toContain('"description":"Syntax of the XRechnung invoice. `UBL`, the default, produces XRechnung UBL; `CII` produces XRechnung CII."');
   });
 
   it('shows a PDF operation a file URL rather than a placeholder in its example arguments', () => {
