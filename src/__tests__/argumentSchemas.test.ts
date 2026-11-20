@@ -389,3 +389,80 @@ describe('tool argument schemas', () => {
     expect(mockAxios).not.toHaveBeenCalled();
   });
 });
+
+describe('string lengths', () => {
+  /** One character, as the API counts it, and two UTF-16 code units. */
+  const EMOJI = '\u{1F600}';
+  const textOf = (result: { content: unknown[] }) => (result.content[0] as { text: string }).text;
+  const form = (fieldDefault: unknown) => ({
+    requestBody: {
+      name: 'Order',
+      actions: [{ store_document: true }],
+      fields: [{ label: 'Note', name: 'note', type: 'text', required: false, default: fieldDefault }],
+    },
+  });
+
+  it('takes a name as long as the limit in characters, though twice as long in UTF-16 code units', async () => {
+    const name = EMOJI.repeat(120);
+    const result = await run('create_template', { requestBody: { name } });
+
+    expect(result.isError).toBeFalsy();
+    expect(mockAxios).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ name }) }));
+  });
+
+  it('refuses a name a character longer than the limit, naming it', async () => {
+    const result = await run('create_template', { requestBody: { name: EMOJI.repeat(121) } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('requestBody.name (too_big): String must contain at most 120 character(s)');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('refuses a name shorter than the limit, naming it', async () => {
+    const result = await run('create_template', { requestBody: { name: '' } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('requestBody.name (too_small): String must contain at least 1 character(s)');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('takes an owner password of 32 characters that are each two UTF-16 code units', async () => {
+    const result = await run('encrypt_document', {
+      requestBody: { file_url: 'https://example.com/document.pdf', owner_password: EMOJI.repeat(32) },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(mockAxios).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses an owner password of 33 characters', async () => {
+    const result = await run('encrypt_document', {
+      requestBody: { file_url: 'https://example.com/document.pdf', owner_password: EMOJI.repeat(33) },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it.each([[EMOJI.repeat(255)], [null]])('takes a nullable field of up to its limit in characters, or null', async (value) => {
+    const result = await run('create_form', form(value));
+
+    expect(result.isError).toBeFalsy();
+    expect(mockAxios).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a nullable field longer than its limit, naming it', async () => {
+    const result = await run('create_form', form(EMOJI.repeat(256)));
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('requestBody.fields.0.default (too_big): String must contain at most 255 character(s)');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it('refuses a value of another type before counting it', async () => {
+    const result = await run('create_template', { requestBody: { name: 120 } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('requestBody.name (invalid_type): Expected string, received number');
+  });
+});

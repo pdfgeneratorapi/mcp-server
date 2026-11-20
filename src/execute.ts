@@ -1,5 +1,5 @@
 import { z, ZodError } from 'zod';
-import { jsonSchemaToZod } from 'json-schema-to-zod';
+import { jsonSchemaToZod, parseString, type ParserOverride } from 'json-schema-to-zod';
 import axios, { type AxiosRequestConfig, type AxiosError } from 'axios';
 import type { CallToolResult, ImageContent } from '@modelcontextprotocol/server';
 import type { McpToolDefinition, JsonObject } from './types.js';
@@ -407,12 +407,32 @@ if (typeof (z.ZodArray.prototype as any).unique !== 'function') {
     };
 }
 
+/**
+ * json-schema-to-zod writes minLength and maxLength as zod's `.min()` and `.max()`, which count
+ * UTF-16 code units, so a name of emoji was refused at half its limit. JSON Schema and the API count
+ * characters, and so does this check, with zod's own issue codes and messages.
+ */
+const lengthInCharacters: ParserOverride = (schema) => {
+    const { minLength, maxLength, ...rest } = schema;
+
+    if (schema.type !== 'string' || (minLength === undefined && maxLength === undefined)) {
+        return undefined;
+    }
+
+    const checks = [
+        Number.isInteger(minLength) ? `if (length < ${minLength}) context.addIssue({ code: 'too_small', minimum: ${minLength}, type: 'string', inclusive: true, exact: false, message: 'String must contain at least ${minLength} character(s)' });` : '',
+        Number.isInteger(maxLength) ? `if (length > ${maxLength}) context.addIssue({ code: 'too_big', maximum: ${maxLength}, type: 'string', inclusive: true, exact: false, message: 'String must contain at most ${maxLength} character(s)' });` : '',
+    ].join(' ');
+
+    return `${parseString({ ...rest, type: 'string' })}.superRefine((value, context) => { const length = [...value].length; ${checks} })`;
+};
+
 function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTypeAny {
     if (typeof jsonSchema !== 'object' || jsonSchema === null) { 
         return z.object({}).passthrough(); 
     }
     try {
-        const zodSchemaString = jsonSchemaToZod(withoutDefaults(allowUnnamedProperties(oneOfAsAnyOf(jsonSchema))));
+        const zodSchemaString = jsonSchemaToZod(withoutDefaults(allowUnnamedProperties(oneOfAsAnyOf(jsonSchema))), { parserOverride: lengthInCharacters });
         // Use Function constructor instead of eval() to restrict scope.
         // Only `z` (zod) is available — no access to process, require, globals, etc.
         const zodSchema = new Function('z', `"use strict"; return (${zodSchemaString});`)(z);
