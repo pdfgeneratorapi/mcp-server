@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { toolDefinitionMap } from '../tools.js';
 import { simplifySchemaForOpenAI } from '../schema.js';
+import { exampleArguments } from '../metaTools.js';
 
 const spec = JSON.parse(readFileSync(resolve(process.cwd(), 'docs/apiv4.json'), 'utf8'));
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'];
@@ -47,7 +48,7 @@ function fields(schema: any, prefix = ''): Set<string> {
  */
 function limits(schema: any): Record<string, unknown> {
   const bound = (value: unknown, exclusive: unknown) =>
-    typeof exclusive === 'number' ? { value: exclusive, exclusive: true }
+    typeof exclusive === 'number' ? { value: exclusive, exclusive: true, ...(value === undefined ? {} : { inclusive: value }) }
       : value === undefined ? undefined : { value, exclusive: exclusive === true };
   return {
     minimum: bound(schema.minimum, schema.exclusiveMinimum),
@@ -101,22 +102,25 @@ function clientWording(text: string, path: string): string {
   return text
     .replaceAll('Use the Get schema endpoint to see', `Use ${schemaOperation} to see`)
     .replaceAll('list in the Get schema endpoint', `list of ${schemaOperation}`)
-    .replaceAll('the template schema (Get schema endpoint)', 'get_template_schema');
+    .replaceAll('the template schema (Get schema endpoint)', schemaOperation);
 }
 
-/** Every description a schema gives, by property path, through unions, arrays and nested objects. */
-function descriptions(schema: any, prefix = '', found = new Map<string, string>()): Map<string, string> {
+/** Every value a schema gives for an annotation, by property path, through unions, arrays and nested objects. */
+function annotations(schema: any, annotation: string, prefix = '', found = new Map<string, unknown>()): Map<string, unknown> {
   if (!schema || typeof schema !== 'object') return found;
-  if (typeof schema.description === 'string') found.set(prefix, schema.description);
+  if (schema[annotation] !== undefined) found.set(prefix, schema[annotation]);
   for (const key of ['allOf', 'oneOf', 'anyOf']) {
-    (schema[key] ?? []).forEach((option: any, index: number) => descriptions(option, `${prefix}<${key}${index}>`, found));
+    (schema[key] ?? []).forEach((option: any, index: number) => annotations(option, annotation, `${prefix}<${key}${index}>`, found));
   }
   for (const [name, property] of Object.entries(schema.properties ?? {})) {
-    descriptions(property, prefix ? `${prefix}.${name}` : name, found);
+    annotations(property, annotation, prefix ? `${prefix}.${name}` : name, found);
   }
-  if (schema.items && typeof schema.items === 'object') descriptions(schema.items, `${prefix}[]`, found);
+  if (schema.items && typeof schema.items === 'object') annotations(schema.items, annotation, `${prefix}[]`, found);
   return found;
 }
+
+/** Every description a schema gives, by property path. */
+const descriptions = (schema: any, prefix = '') => annotations(schema, 'description', prefix) as Map<string, string>;
 
 /** Fields whose tool says it in other words than the spec, by tool and field, and why. */
 const OWN_WORDING: Record<string, string> = {
@@ -245,6 +249,25 @@ describe('tool catalogue', () => {
 
   it('describes every field and parameter as the spec does, naming the schema operations for a client', () => {
     expect(wording.filter(({ field }) => !(field in OWN_WORDING)).map(({ field, detail }) => `${field}: ${detail}`)).toEqual([]);
+  });
+
+  it('gives every file URL the example its operation gives', () => {
+    const differing = tools.flatMap(({ tool, key }) => {
+      const operation = operations.find((candidate) => candidate.key === key);
+      if (!operation?.schema) return [];
+      const own = annotations(tool.inputSchema.properties?.requestBody, 'example');
+      return [...annotations(operation.schema, 'example')]
+        .filter(([field]) => field.endsWith('file_url'))
+        .flatMap(([field, example]) => JSON.stringify(own.get(field)) === JSON.stringify(example)
+          ? [] : [`${tool.name} ${field}: ${JSON.stringify(own.get(field))} != ${JSON.stringify(example)}`]);
+    });
+
+    expect(differing).toEqual([]);
+  });
+
+  it('shows a PDF operation a file URL rather than a placeholder in its example arguments', () => {
+    expect(exampleArguments(toolDefinitionMap.get('optimize_document')!.inputSchema as any))
+      .toEqual({ requestBody: { file_url: 'https://example.com/document.pdf' } });
   });
 
   it('lists as its own wording only fields that still differ', () => {
