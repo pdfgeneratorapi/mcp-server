@@ -162,14 +162,14 @@ describe('searchOperations', () => {
     expect(ids(search('testing'))).not.toContain('create_facturx_einvoice');
   });
 
-  it('finds the generate operations by the name of their display_mode', () => {
-    expect(ids(search('display_mode'))).toEqual(expect.arrayContaining([
+  it.each([['display_mode'], ['display mode'], ['mode']])('finds the generate operations first by the name of their display_mode, "%s"', (query) => {
+    expect(ids(search(query)).slice(0, 4).sort()).toEqual([
       'generate_document', 'generate_document_async', 'generate_document_batch', 'generate_document_batch_async',
-    ]));
+    ]);
   });
 
-  it('finds the generate operations for a free test document, which they make with testing', () => {
-    expect(ids(search('testing'))).toContain('generate_document');
+  it('finds the generate operations first for a free test document, which they make with testing', () => {
+    expect(ids(search('testing'))[0]).toBe('generate_document');
   });
 
   it.each([
@@ -187,10 +187,12 @@ describe('searchOperations', () => {
     },
   );
 
-  it('finds the e-invoice operations for a credit note', () => {
-    expect(ids(search('credit note'))).toEqual(expect.arrayContaining([
-      'create_einvoice', 'create_xrechnung_einvoice', 'create_facturx_einvoice',
-    ]));
+  it('finds the e-invoice operations first for a credit note, by the heading of their instructions', () => {
+    expect(ids(search('credit note')).slice(0, 3).sort()).toEqual(['create_einvoice', 'create_facturx_einvoice', 'create_xrechnung_einvoice']);
+  });
+
+  it('keeps a question about what costs credits away from the e-invoice operations', () => {
+    expect(ids(search('credits'))[0]).toBe('preview_template');
   });
 
   it('ranks an operation matching every term above those matching some', () => {

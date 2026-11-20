@@ -36,11 +36,12 @@ const UNSCOPED_CATEGORIES: Record<string, OperationCategory> = {
  * Arguments of the generate operations people search by: display_mode, how a PDF viewer opens the
  * document, and testing, a free document with a preview stamp.
  */
-const GENERATE_ARGUMENTS = ['display', 'zoom', 'thumbnails', 'bookmarks', 'fullscreen', 'testing'];
+const GENERATE_ARGUMENTS = ['display', 'mode', 'zoom', 'thumbnails', 'bookmarks', 'fullscreen', 'testing'];
 
 /**
- * Words for what an operation takes, rather than what it does. They weigh as little as its
- * description, so an operation made for the job ranks above one that only takes it as an argument.
+ * Words for what an operation takes, rather than what it does. They weigh less than a keyword, so
+ * an operation made for the job ranks above one that only takes it as an argument, and more than a
+ * word in a description.
  */
 const ARGUMENTS: Record<string, string[]> = {
   generate_document: GENERATE_ARGUMENTS,
@@ -58,9 +59,7 @@ const KEYWORDS: Record<string, string[]> = {
   encrypt_document: ['password', 'protect', 'lock', 'secure'],
   decrypt_document: ['password', 'unlock', 'remove'],
   make_accessible: ['ua', 'a11y', 'tagged'],
-  create_einvoice: ['credit'],
-  create_xrechnung_einvoice: ['credit'],
-  create_facturx_einvoice: ['zugferd', 'credit'],
+  create_facturx_einvoice: ['zugferd'],
   get_document_signatures: ['signed', 'verify'],
   promote_template_version: ['restore', 'revert', 'rollback', 'publish', 'live'],
   copy_template: ['duplicate', 'clone'],
@@ -90,14 +89,14 @@ const KEYWORDS: Record<string, string[]> = {
  * so they don't lead to it: Factur-X can't be previewed with testing.
  */
 const RULED_OUT: Record<string, string[]> = {
-  create_facturx_einvoice: ['preview', 'mode', 'testing', 'true', 'available'],
+  create_facturx_einvoice: ['preview', 'mode', 'testing', 'true', 'not', 'available'],
 };
 
 const ID_WEIGHT = 3;
 const TITLE_WEIGHT = 3;
 const KEYWORD_WEIGHT = 2;
 const DESCRIPTION_WEIGHT = 1;
-const ARGUMENT_WEIGHT = 1;
+const ARGUMENT_WEIGHT = 1.5;
 const PLURAL_MATCH = 0.9;
 const PARTIAL_MATCH = 0.7;
 const MIN_PARTIAL_LENGTH = 3;
@@ -140,12 +139,14 @@ export interface SearchResult {
 }
 
 /**
- * What an operation is, for the search: its description up to its first bold section. The
- * sections, such as the e-invoice operations' credit notes, are instructions for describe_operation,
- * and their words would lead searches about other things to it.
+ * What an operation is, for the search: its description up to its first bold section, and the
+ * headings of its sections. A section, such as the e-invoice operations' credit notes, is
+ * instructions for describe_operation, and its words would lead searches about other things to it.
  */
 function summaryOf(description: string): string {
-  return description.split('\n\n**')[0];
+  const [summary, ...sections] = description.split('\n\n**');
+
+  return [summary, ...sections.map(section => section.split('**')[0])].join(' ');
 }
 
 function words(text: string): string[] {
