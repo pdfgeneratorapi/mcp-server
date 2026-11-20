@@ -387,13 +387,6 @@ function formatApiError(error: AxiosError): string {
 }
 
 /**
- * Converts a JSON Schema to a Zod schema for runtime validation
- * 
- * @param jsonSchema JSON Schema
- * @param toolName Tool name for error reporting
- * @returns Zod schema
- */
-/**
  * json-schema-to-zod writes uniqueItems as `.unique()`, a method zod 3 arrays do not have, so the
  * schema failed to build and the tool accepted anything. Arrays get that method here: a list whose
  * items are not all different is refused, as the API refuses it.
@@ -413,20 +406,19 @@ if (typeof (z.ZodArray.prototype as any).unique !== 'function') {
  */
 const PLAIN_STRING_KEYWORDS = new Set(['type', 'description', 'title', 'minLength', 'maxLength', 'format', 'pattern', 'example', 'examples', 'default', 'deprecated', 'nullable']);
 
-/** Whitespace the API trims from either end of a string before it checks the string's length. */
-const SURROUNDING_WHITESPACE = /^[\s​-‏⁠]+|[\s​-‏⁠]+$/gu;
-
-/** A string's length as the API counts it: in code points, after trimming the whitespace around it. */
+/** A string's length as the API counts it, in code points. */
 export function lengthOf(value: string): number {
-    return [...value.replace(SURROUNDING_WHITESPACE, '')].length;
+    return [...value].length;
 }
 
 /**
  * json-schema-to-zod writes minLength and maxLength as zod's `.min()` and `.max()`, which count
- * UTF-16 code units, so a name of emoji was refused at half its limit. The API counts code points
- * after trimming, and so does this check, through lengthOf, with zod's own issue codes and
- * messages. A plain string only: one with another keyword, nullable: true, or a length that is not
- * a whole number is left to the library.
+ * UTF-16 code units, so a name of emoji was refused at half its limit. The API counts code points,
+ * and so does this check, through lengthOf, with zod's own issue codes and messages. It counts the
+ * value as sent, as the format and pattern checks see it: the API trims a string first, so a value
+ * padded with whitespace past its limit is refused here. A plain string only: one with another
+ * keyword or a length that is not a whole number is left to the library, and a nullable one comes
+ * back here without its nullable.
  */
 const lengthInCharacters: ParserOverride = (schema) => {
     const { minLength, maxLength, ...rest } = schema;
@@ -445,6 +437,13 @@ const lengthInCharacters: ParserOverride = (schema) => {
     return `${parseString({ ...rest, type: 'string' })}.superRefine((value, context) => { const length = lengthOf(value); ${checks} })`;
 };
 
+/**
+ * Converts a JSON Schema to a Zod schema for runtime validation
+ * 
+ * @param jsonSchema JSON Schema
+ * @param toolName Tool name for error reporting
+ * @returns Zod schema
+ */
 function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTypeAny {
     if (typeof jsonSchema !== 'object' || jsonSchema === null) { 
         return z.object({}).passthrough(); 

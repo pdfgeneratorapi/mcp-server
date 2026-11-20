@@ -504,18 +504,11 @@ describe('string lengths', () => {
     expect(result.isError).toBe(true);
   });
 
-  it('counts a value as the API does, after trimming the whitespace around it', async () => {
-    const result = await run('create_template', { requestBody: { name: ` ${EMOJI.repeat(120)}\u200B ` } });
-
-    expect(result.isError).toBeFalsy();
-    expect(mockAxios).toHaveBeenCalledTimes(1);
-  });
-
-  it('refuses a name of only whitespace, which the API trims to nothing', async () => {
-    const result = await run('create_template', { requestBody: { name: '   ' } });
+  it('counts a value as sent, the whitespace around it included, as its format is checked', async () => {
+    const result = await run('create_template', { requestBody: { name: ` ${EMOJI.repeat(120)}` } });
 
     expect(result.isError).toBe(true);
-    expect(textOf(result)).toContain('requestBody.name (too_small): String must contain at least 1 character(s)');
+    expect(textOf(result)).toContain('requestBody.name (too_big): String must contain at most 120 character(s)');
   });
 
   it('leaves a string with a keyword it does not know to the library, keeping its message', async () => {
