@@ -155,6 +155,17 @@ describe('searchOperations', () => {
 
   it('finds no operation by what its description says it cannot do', () => {
     expect(ids(search('preview'))).toEqual(['preview_template', 'show_pdf_pages']);
+    expect(ids(search('testing'))).not.toContain('create_facturx_einvoice');
+  });
+
+  it('finds the generate operations by the name of their display_mode', () => {
+    expect(ids(search('display_mode'))).toEqual(expect.arrayContaining([
+      'generate_document', 'generate_document_async', 'generate_document_batch', 'generate_document_batch_async',
+    ]));
+  });
+
+  it('finds the generate operations for a free test document, which they make with testing', () => {
+    expect(ids(search('testing'))[0]).toBe('generate_document');
   });
 
   it('ranks an operation matching every term above those matching some', () => {

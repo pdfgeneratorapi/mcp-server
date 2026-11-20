@@ -454,7 +454,8 @@ function withoutDefaults(schema: any, isPropertyMap = false): any {
  * Each issue as its path, its code and its message. A union's own issue says only "Invalid input";
  * when exactly one of its options takes the value's type, that option's issues say what is wrong,
  * such as the values an enum allows, so those are given instead. An option for another type adds
- * nothing but the type mismatch; when every option is one, the types the union takes are named.
+ * nothing but the type mismatch; when every option is one, the types the union takes are named, or
+ * that a value is required when none was given.
  */
 function describeIssues(issues: z.ZodIssue[]): string[] {
     return issues.flatMap((issue) => {
@@ -468,6 +469,9 @@ function describeIssues(issues: z.ZodIssue[]): string[] {
             if (options.length === 0) {
                 const mismatches = issue.unionErrors.flatMap((option) => option.issues.flatMap((inner) =>
                     inner.code === 'invalid_type' ? [{ expected: inner.expected, received: inner.received }] : []));
+                if (mismatches.every((mismatch) => mismatch.received === 'undefined')) {
+                    return [`${where} (invalid_type): Required`];
+                }
                 const expected = [...new Set(mismatches.map((mismatch) => mismatch.expected))].join(' or ');
 
                 return [`${where} (invalid_type): Expected ${expected}, received ${mismatches[0]?.received}`];

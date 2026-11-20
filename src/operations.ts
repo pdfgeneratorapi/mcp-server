@@ -32,8 +32,11 @@ const UNSCOPED_CATEGORIES: Record<string, OperationCategory> = {
   get_einvoice_schema: 'einvoice',
 };
 
-/** How a PDF viewer opens a generated document: the generate operations' display_mode. */
-const VIEWER_OPTIONS = ['zoom', 'thumbnails', 'bookmarks', 'fullscreen'];
+/**
+ * Arguments of the generate operations people search by: display_mode, how a PDF viewer opens the
+ * document, and testing, a free document with a preview stamp.
+ */
+const GENERATE_ARGUMENTS = ['display', 'zoom', 'thumbnails', 'bookmarks', 'fullscreen', 'testing'];
 
 /**
  * Words people use for an operation that its ID, title and description don't carry, so a search
@@ -54,10 +57,10 @@ const KEYWORDS: Record<string, string[]> = {
   delete_document: ['remove'],
   delete_workspace: ['remove'],
   delete_form: ['remove'],
-  generate_document: ['render', 'merge', 'create', ...VIEWER_OPTIONS],
-  generate_document_async: VIEWER_OPTIONS,
-  generate_document_batch: VIEWER_OPTIONS,
-  generate_document_batch_async: VIEWER_OPTIONS,
+  generate_document: ['render', 'merge', 'create', ...GENERATE_ARGUMENTS],
+  generate_document_async: GENERATE_ARGUMENTS,
+  generate_document_batch: GENERATE_ARGUMENTS,
+  generate_document_batch_async: GENERATE_ARGUMENTS,
   get_template_data: ['placeholders', 'fields', 'sample'],
   validate_template: ['check'],
   open_editor: ['edit', 'design'],
@@ -72,10 +75,10 @@ const KEYWORDS: Record<string, string[]> = {
 
 /**
  * Words an operation's description uses only to say what it does not do, left out of the search
- * so they don't lead to it: Factur-X can't be previewed.
+ * so they don't lead to it: Factur-X can't be previewed with testing.
  */
 const RULED_OUT: Record<string, string[]> = {
-  create_facturx_einvoice: ['preview', 'mode'],
+  create_facturx_einvoice: ['preview', 'mode', 'testing', 'true', 'available'],
 };
 
 const ID_WEIGHT = 3;

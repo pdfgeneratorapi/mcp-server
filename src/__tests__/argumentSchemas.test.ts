@@ -274,6 +274,13 @@ describe('tool argument schemas', () => {
     expect((mockAxios.mock.calls[0][0] as any).data.display_mode).toBeNull();
   });
 
+  it('says a required body that is one of several shapes is required, when none is sent', async () => {
+    const result = await run('add_watermark', {});
+
+    expect((result.content[0] as { text: string }).text).toContain('requestBody (invalid_type): Required');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
   it.each([
     [{ zoom: 'fit' }, 'requestBody.display_mode.zoom', "'fullpage' | 'fullwidth' | 'real' | 'default'"],
     [{ layout: 'ThreeColumns' }, 'requestBody.display_mode.layout', "'SinglePage' | 'OneColumn' | 'TwoColumnLeft' | 'TwoColumnRight'"],
