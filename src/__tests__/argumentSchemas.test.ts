@@ -489,6 +489,21 @@ describe('string lengths', () => {
     expect(Boolean(result.isError)).toBe(refused);
   });
 
+  it.each([
+    [EMOJI.repeat(2), false],
+    [EMOJI.repeat(3), true],
+  ])('counts in characters beside nullable: false: %s refused is %s', async (code, refused) => {
+    const result = await executeApiTool('testTool', toolWith({ type: 'string', nullable: false, maxLength: 2 }) as any, { code }, undefined);
+
+    expect(Boolean(result.isError)).toBe(refused);
+  });
+
+  it('keeps a length that is not a whole number, rather than dropping it', async () => {
+    const result = await executeApiTool('testTool', toolWith({ type: 'string', maxLength: 2.5 }) as any, { code: 'abcd' }, undefined);
+
+    expect(result.isError).toBe(true);
+  });
+
   it('refuses a value of another type before counting it', async () => {
     const result = await run('create_template', { requestBody: { name: 120 } });
 

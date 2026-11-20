@@ -408,26 +408,27 @@ if (typeof (z.ZodArray.prototype as any).unique !== 'function') {
 }
 
 /** Keywords json-schema-to-zod handles before a schema's type, which a string's own parser would drop. */
-const WRAPPING_KEYWORDS = ['nullable', 'enum', 'const', 'anyOf', 'allOf', 'oneOf', 'not', 'if'];
+const WRAPPING_KEYWORDS = ['enum', 'const', 'anyOf', 'allOf', 'oneOf', 'not', 'if'];
 
 /**
  * json-schema-to-zod writes minLength and maxLength as zod's `.min()` and `.max()`, which count
  * UTF-16 code units, so a name of emoji was refused at half its limit. JSON Schema and the API count
  * code points, and so does this check, with zod's own issue codes and messages. A string that also
- * carries a wrapping keyword is left to the library, which parses it again without the keyword
- * where it can, as for nullable.
+ * carries a wrapping keyword, or nullable: true, is left to the library, which parses it again
+ * without the keyword where it can, as for nullable; so is a length that is not a whole number.
  */
 const lengthInCharacters: ParserOverride = (schema) => {
     const { minLength, maxLength, ...rest } = schema;
 
     if (schema.type !== 'string' || (minLength === undefined && maxLength === undefined)
-        || WRAPPING_KEYWORDS.some((keyword) => keyword in schema)) {
+        || [minLength, maxLength].some((length) => length !== undefined && !Number.isInteger(length))
+        || schema.nullable === true || WRAPPING_KEYWORDS.some((keyword) => keyword in schema)) {
         return undefined;
     }
 
     const checks = [
-        Number.isInteger(minLength) ? `if (length < ${minLength}) context.addIssue({ code: 'too_small', minimum: ${minLength}, type: 'string', inclusive: true, exact: false, message: 'String must contain at least ${minLength} character(s)' });` : '',
-        Number.isInteger(maxLength) ? `if (length > ${maxLength}) context.addIssue({ code: 'too_big', maximum: ${maxLength}, type: 'string', inclusive: true, exact: false, message: 'String must contain at most ${maxLength} character(s)' });` : '',
+        minLength === undefined ? '' : `if (length < ${minLength}) context.addIssue({ code: 'too_small', minimum: ${minLength}, type: 'string', inclusive: true, exact: false, message: 'String must contain at least ${minLength} character(s)' });`,
+        maxLength === undefined ? '' : `if (length > ${maxLength}) context.addIssue({ code: 'too_big', maximum: ${maxLength}, type: 'string', inclusive: true, exact: false, message: 'String must contain at most ${maxLength} character(s)' });`,
     ].join(' ');
 
     return `${parseString({ ...rest, type: 'string' })}.superRefine((value, context) => { const length = [...value].length; ${checks} })`;
