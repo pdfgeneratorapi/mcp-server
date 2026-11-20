@@ -268,6 +268,17 @@ describe('tool argument schemas', () => {
   });
 
   it.each([
+    ['a zoom', { zoom: 'fit' }],
+    ['an opening panel', { mode: 'UseAttachments' }],
+    ['a setting', { Layout: 'OneColumn' }],
+  ])('refuses %s a PDF viewer does not have before it reaches the API', async (_, display_mode) => {
+    const result = await run('generate_document', { requestBody: { template: { id: 58057, data: {} }, display_mode } });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it.each([
     ['a template name longer than 120 characters', 'create_template', { name: 'x'.repeat(121) }],
     ['a callback URL that is not https', 'generate_document_async', {
       template: { id: 58057, data: {} },
