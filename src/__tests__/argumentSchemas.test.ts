@@ -504,6 +504,33 @@ describe('string lengths', () => {
     expect(result.isError).toBe(true);
   });
 
+  it('counts a value as the API does, after trimming the whitespace around it', async () => {
+    const result = await run('create_template', { requestBody: { name: ` ${EMOJI.repeat(120)}\u200B ` } });
+
+    expect(result.isError).toBeFalsy();
+    expect(mockAxios).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses a name of only whitespace, which the API trims to nothing', async () => {
+    const result = await run('create_template', { requestBody: { name: '   ' } });
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('requestBody.name (too_small): String must contain at least 1 character(s)');
+  });
+
+  it('leaves a string with a keyword it does not know to the library, keeping its message', async () => {
+    const result = await executeApiTool('testTool', toolWith({ type: 'string', maxLength: 2, errorMessage: { maxLength: 'Too long' } }) as any, { code: 'abc' }, undefined);
+
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain('code (too_big): Too long');
+  });
+
+  it('leaves a string the library transforms to the library, rather than counting what it parsed', async () => {
+    const result = await executeApiTool('testTool', toolWith({ type: 'string', maxLength: 3, contentMediaType: 'application/json' }) as any, { code: '5' }, undefined);
+
+    expect(result.isError).toBeFalsy();
+  });
+
   it('refuses a value of another type before counting it', async () => {
     const result = await run('create_template', { requestBody: { name: 120 } });
 

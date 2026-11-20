@@ -407,22 +407,33 @@ if (typeof (z.ZodArray.prototype as any).unique !== 'function') {
     };
 }
 
-/** Keywords json-schema-to-zod handles before a schema's type, which a string's own parser would drop. */
-const WRAPPING_KEYWORDS = ['enum', 'const', 'anyOf', 'allOf', 'oneOf', 'not', 'if'];
+/**
+ * The keywords a length-limited string may carry for lengthInCharacters to check it; a string with
+ * any other is left to the library, which knows what the keyword wraps or transforms.
+ */
+const PLAIN_STRING_KEYWORDS = new Set(['type', 'description', 'title', 'minLength', 'maxLength', 'format', 'pattern', 'example', 'examples', 'default', 'deprecated', 'nullable']);
+
+/** Whitespace the API trims from either end of a string before it checks the string's length. */
+const SURROUNDING_WHITESPACE = /^[\s​-‏⁠]+|[\s​-‏⁠]+$/gu;
+
+/** A string's length as the API counts it: in code points, after trimming the whitespace around it. */
+export function lengthOf(value: string): number {
+    return [...value.replace(SURROUNDING_WHITESPACE, '')].length;
+}
 
 /**
  * json-schema-to-zod writes minLength and maxLength as zod's `.min()` and `.max()`, which count
- * UTF-16 code units, so a name of emoji was refused at half its limit. JSON Schema and the API count
- * code points, and so does this check, with zod's own issue codes and messages. A string that also
- * carries a wrapping keyword, or nullable: true, is left to the library, which parses it again
- * without the keyword where it can, as for nullable; so is a length that is not a whole number.
+ * UTF-16 code units, so a name of emoji was refused at half its limit. The API counts code points
+ * after trimming, and so does this check, through lengthOf, with zod's own issue codes and
+ * messages. A plain string only: one with another keyword, nullable: true, or a length that is not
+ * a whole number is left to the library.
  */
 const lengthInCharacters: ParserOverride = (schema) => {
     const { minLength, maxLength, ...rest } = schema;
 
     if (schema.type !== 'string' || (minLength === undefined && maxLength === undefined)
         || [minLength, maxLength].some((length) => length !== undefined && !Number.isInteger(length))
-        || schema.nullable === true || WRAPPING_KEYWORDS.some((keyword) => keyword in schema)) {
+        || schema.nullable === true || Object.keys(schema).some((keyword) => !PLAIN_STRING_KEYWORDS.has(keyword))) {
         return undefined;
     }
 
@@ -431,7 +442,7 @@ const lengthInCharacters: ParserOverride = (schema) => {
         maxLength === undefined ? '' : `if (length > ${maxLength}) context.addIssue({ code: 'too_big', maximum: ${maxLength}, type: 'string', inclusive: true, exact: false, message: 'String must contain at most ${maxLength} character(s)' });`,
     ].join(' ');
 
-    return `${parseString({ ...rest, type: 'string' })}.superRefine((value, context) => { const length = [...value].length; ${checks} })`;
+    return `${parseString({ ...rest, type: 'string' })}.superRefine((value, context) => { const length = lengthOf(value); ${checks} })`;
 };
 
 function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTypeAny {
@@ -441,8 +452,8 @@ function getZodSchemaFromJsonSchema(jsonSchema: any, toolName: string): z.ZodTyp
     try {
         const zodSchemaString = jsonSchemaToZod(withoutDefaults(allowUnnamedProperties(oneOfAsAnyOf(jsonSchema))), { parserOverride: lengthInCharacters });
         // Use Function constructor instead of eval() to restrict scope.
-        // Only `z` (zod) is available — no access to process, require, globals, etc.
-        const zodSchema = new Function('z', `"use strict"; return (${zodSchemaString});`)(z);
+        // Only `z` (zod) and lengthOf are available — no access to process, require, globals, etc.
+        const zodSchema = new Function('z', 'lengthOf', `"use strict"; return (${zodSchemaString});`)(z, lengthOf);
         if (typeof zodSchema?.parse !== 'function') {
             throw new Error('Function did not produce a valid Zod schema.');
         }
