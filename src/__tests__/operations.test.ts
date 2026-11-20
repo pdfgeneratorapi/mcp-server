@@ -142,6 +142,59 @@ describe('searchOperations', () => {
     expect(ids(search(query))).toEqual(expect.arrayContaining(['update_template', 'run_builder_tool']));
   });
 
+  it.each([['zoom'], ['initial zoom'], ['bookmarks panel'], ['fullscreen']])(
+    'finds the generate operations, which say how a PDF viewer opens the document, for "%s"',
+    (query) => {
+      expect(ids(search(query))[0]).toBe('generate_document');
+    },
+  );
+
+  it('finds both the page images and the generate operations for "thumbnails", which can mean either', () => {
+    expect(ids(search('thumbnails'))).toEqual(expect.arrayContaining(['show_pdf_pages', 'preview_template', 'generate_document']));
+  });
+
+  it('keeps a text outline with the text operations, not with how a PDF viewer opens', () => {
+    expect(ids(search('outline'))[0]).toBe('measure_text');
+  });
+
+  it('finds no operation by what its description says it cannot do', () => {
+    expect(ids(search('preview'))).toEqual(['preview_template', 'show_pdf_pages']);
+    expect(ids(search('testing'))).not.toContain('create_facturx_einvoice');
+  });
+
+  it.each([['display_mode'], ['display mode'], ['mode']])('finds the generate operations first by the name of their display_mode, "%s"', (query) => {
+    expect(ids(search(query)).slice(0, 4).sort()).toEqual([
+      'generate_document', 'generate_document_async', 'generate_document_batch', 'generate_document_batch_async',
+    ]);
+  });
+
+  it('finds the generate operations first for a free test document, which they make with testing', () => {
+    expect(ids(search('testing'))[0]).toBe('generate_document');
+  });
+
+  it.each([
+    ['pdf thumbnails', 'show_pdf_pages'],
+    ['display pdf', 'show_pdf_pages'],
+    ['test template', 'validate_template'],
+  ])('ranks the operation made for "%s" above the generate operations, which only take it as an argument', (query, first) => {
+    expect(ids(search(query))[0]).toBe(first);
+  });
+
+  it.each([['list documents'], ['get document'], ['outline'], ['type']])(
+    'finds no e-invoice operation for "%s" through its credit-note instructions',
+    (query) => {
+      expect(ids(search(query)).filter((id) => id.includes('einvoice'))).toEqual([]);
+    },
+  );
+
+  it('finds the e-invoice operations first for a credit note, by the heading of their instructions', () => {
+    expect(ids(search('credit note')).slice(0, 3).sort()).toEqual(['create_einvoice', 'create_facturx_einvoice', 'create_xrechnung_einvoice']);
+  });
+
+  it('keeps a question about what costs credits away from the e-invoice operations', () => {
+    expect(ids(search('credits'))[0]).toBe('preview_template');
+  });
+
   it('ranks an operation matching every term above those matching some', () => {
     expect(ids(search('delete template')).slice(0, 2)).toEqual(['delete_template', 'delete_template_version']);
   });

@@ -33,6 +33,24 @@ const UNSCOPED_CATEGORIES: Record<string, OperationCategory> = {
 };
 
 /**
+ * Arguments of the generate operations people search by: display_mode, how a PDF viewer opens the
+ * document, and testing, a free document with a preview stamp.
+ */
+const GENERATE_ARGUMENTS = ['display', 'mode', 'zoom', 'thumbnails', 'bookmarks', 'fullscreen', 'testing'];
+
+/**
+ * Words for what an operation takes, rather than what it does. They weigh less than a keyword, so
+ * an operation made for the job ranks above one that only takes it as an argument, and more than a
+ * word in a description.
+ */
+const ARGUMENTS: Record<string, string[]> = {
+  generate_document: GENERATE_ARGUMENTS,
+  generate_document_async: GENERATE_ARGUMENTS,
+  generate_document_batch: GENERATE_ARGUMENTS,
+  generate_document_batch_async: GENERATE_ARGUMENTS,
+};
+
+/**
  * Words people use for an operation that its ID, title and description don't carry, so a search
  * in the user's words still finds it.
  */
@@ -53,8 +71,10 @@ const KEYWORDS: Record<string, string[]> = {
   delete_form: ['remove'],
   generate_document: ['render', 'merge', 'create'],
   get_template_data: ['placeholders', 'fields', 'sample'],
-  validate_template: ['check'],
+  validate_template: ['check', 'test'],
   open_editor: ['edit', 'design'],
+  preview_template: ['thumbnails', 'display'],
+  show_pdf_pages: ['thumbnails', 'display'],
   get_builder_guide: ['build', 'layout', 'design'],
   run_builder_tool: ['component', 'page', 'row', 'column', 'table', 'add', 'move', 'patch', 'remove', 'change', 'edit', 'modify', 'rename', 'restyle'],
   convert_url_to_pdf: ['website', 'webpage', 'web'],
@@ -64,10 +84,19 @@ const KEYWORDS: Record<string, string[]> = {
   share_form: ['link', 'public', 'collect'],
 };
 
+/**
+ * Words an operation's description uses only to say what it does not do, left out of the search
+ * so they don't lead to it: Factur-X can't be previewed with testing.
+ */
+const RULED_OUT: Record<string, string[]> = {
+  create_facturx_einvoice: ['preview', 'mode', 'testing', 'true', 'not', 'available'],
+};
+
 const ID_WEIGHT = 3;
 const TITLE_WEIGHT = 3;
 const KEYWORD_WEIGHT = 2;
 const DESCRIPTION_WEIGHT = 1;
+const ARGUMENT_WEIGHT = 1.5;
 const PLURAL_MATCH = 0.9;
 const PARTIAL_MATCH = 0.7;
 const MIN_PARTIAL_LENGTH = 3;
@@ -107,6 +136,17 @@ export interface SearchResult {
   found: Operation[];
   /** How many operations matched in all. */
   total: number;
+}
+
+/**
+ * What an operation is, for the search: its description up to its first bold section, and the
+ * headings of its sections. A section, such as the e-invoice operations' credit notes, is
+ * instructions for describe_operation, and its words would lead searches about other things to it.
+ */
+function summaryOf(description: string): string {
+  const [summary, ...sections] = description.split('\n\n**');
+
+  return [summary, ...sections.map(section => section.split('**')[0])].join(' ');
 }
 
 function words(text: string): string[] {
@@ -156,7 +196,11 @@ const index: Map<string, IndexedOperation> = new Map(
       { words: new Set(words(operation.id)), weight: ID_WEIGHT },
       { words: new Set(words(operation.title)), weight: TITLE_WEIGHT },
       { words: new Set(KEYWORDS[operation.id] ?? []), weight: KEYWORD_WEIGHT },
-      { words: new Set(words(operation.definition.description)), weight: DESCRIPTION_WEIGHT },
+      {
+        words: new Set(words(summaryOf(operation.definition.description)).filter(word => !RULED_OUT[operation.id]?.includes(word))),
+        weight: DESCRIPTION_WEIGHT,
+      },
+      { words: new Set(ARGUMENTS[operation.id] ?? []), weight: ARGUMENT_WEIGHT },
     ],
   }]),
 );

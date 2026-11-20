@@ -244,6 +244,66 @@ describe('tool argument schemas', () => {
     expect((result.content[0] as { text: string }).text).not.toContain('requestBody.type');
   });
 
+  const generate = [
+    ['generate_document', { template: { id: 58057, data: {} } }],
+    ['generate_document_async', { template: { id: 58057, data: {} }, callback: { url: 'https://example.test/callback' } }],
+    ['generate_document_batch', { template: [{ id: 58057, data: {} }] }],
+    ['generate_document_batch_async', { template: [{ id: 58057, data: {} }], callback: { url: 'https://example.test/callback' } }],
+  ] as const;
+
+  it.each(generate)('sends %s how a PDF viewer opens the document', async (tool, requestBody) => {
+    const display_mode = { layout: 'TwoColumnLeft', mode: 'UseThumbs', zoom: 'real' };
+
+    const result = await run(tool, { requestBody: { ...requestBody, display_mode } });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data.display_mode).toEqual(display_mode);
+  });
+
+  it.each(generate)('refuses a page layout a PDF viewer does not have for %s before it reaches the API', async (tool, requestBody) => {
+    const result = await run(tool, { requestBody: { ...requestBody, display_mode: { layout: 'ThreeColumns' } } });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it.each(generate)('sends %s a null display mode as null, as the API takes it', async (tool, requestBody) => {
+    const result = await run(tool, { requestBody: { ...requestBody, display_mode: null } });
+
+    expect(result.isError).toBeFalsy();
+    expect((mockAxios.mock.calls[0][0] as any).data.display_mode).toBeNull();
+  });
+
+  it('says a required body that is one of several shapes is required, when none is sent', async () => {
+    const result = await run('add_watermark', {});
+
+    expect((result.content[0] as { text: string }).text).toContain('requestBody (invalid_type): Required');
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ zoom: 'fit' }, 'requestBody.display_mode.zoom', "'fullpage' | 'fullwidth' | 'real' | 'default'"],
+    [{ layout: 'ThreeColumns' }, 'requestBody.display_mode.layout', "'SinglePage' | 'OneColumn' | 'TwoColumnLeft' | 'TwoColumnRight'"],
+    ['fullwidth', 'requestBody.display_mode', 'Expected object or null, received string'],
+  ])('names the field and what a PDF viewer takes when %j is not one of them', async (display_mode, field, allowed) => {
+    const result = await run('generate_document', { requestBody: { template: { id: 58057, data: {} }, display_mode } });
+
+    const text = (result.content[0] as { text: string }).text;
+    expect(text).toContain(field);
+    expect(text).toContain(allowed);
+  });
+
+  it.each([
+    ['a zoom', { zoom: 'fit' }],
+    ['an opening panel', { mode: 'UseAttachments' }],
+    ['a setting', { Layout: 'OneColumn' }],
+  ])('refuses %s a PDF viewer does not have before it reaches the API', async (_, display_mode) => {
+    const result = await run('generate_document', { requestBody: { template: { id: 58057, data: {} }, display_mode } });
+
+    expect(result.isError).toBe(true);
+    expect(mockAxios).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['a template name longer than 120 characters', 'create_template', { name: 'x'.repeat(121) }],
     ['a callback URL that is not https', 'generate_document_async', {
